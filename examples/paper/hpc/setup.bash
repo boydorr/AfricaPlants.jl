@@ -35,7 +35,7 @@ set -euo pipefail
 # pass unchecked: stop here instead.
 missing=0
 while read -r entry; do
-    if [[ "$entry" == data/* && ! -e "$entry" ]]; then
+    if [[ -n "$entry" && "$entry" != \#* && ! -e "$entry" ]]; then
         echo "Not copied here: $entry (see examples/paper/hpc/transfer.txt)" >&2
         missing=1
     fi

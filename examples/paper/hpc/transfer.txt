@@ -3,11 +3,8 @@
 #
 #     rsync -av -r --files-from=examples/paper/hpc/transfer.txt . <host>:<clone>/
 #
-# The manifests hold the versions the blessed values were made with; without them the HPC resolves
-# the newest compatible versions. `setup.bash` checks that every `data/` entry is there, and its
-# blessing test checks each file's digest. rsync skips lines starting with `#`.
-Manifest.toml
-examples/paper/Manifest.toml
+# `setup.bash` checks that every entry is there, and its blessing test checks each file's digest.
+# rsync skips lines starting with `#`.
 data/era5/
 data/records_africa.csv
 data/species_widths.csv
