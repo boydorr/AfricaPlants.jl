@@ -8,8 +8,21 @@
       `burnin_seed<N>_00.jld2` and `start_seed<N>_00.jld2`, and `examples/africa_forward.jl` starts
       from its own seed's settled state by default, so that no result rests on one realisation of
       the burn-in. The species are the same in every replicate (`AFRICA_SPECIES_SEED`).
+    - `examples/africa_plots.jl` draws richness on a scale that stops at the 98th percentile of
+      cell richness, draws cells that never held an individual in any run as sea rather than as no
+      species, while a cell that lost every plant still shows as empty, and ignores the saved end states (`*_end00.jld2`) beside the runs, which it used to open as
+      runs and fail on.
     - CSV 1 is required: the record-cleaning script keeps parse problems quiet with its
       `on_error` keyword. The `examples/` environment declares CSV, DataFrames and Unitful.
+  - Added
+    - `abundance.pdf` and `climate_effect.pdf` from `examples/africa_plots.jl`: the individuals
+      each cell holds at the end with and without the changing climate, and their difference in
+      individuals.
+    - `examples/africa_series.jl` draws `timeseries.pdf` from the yearly `diversity_*.csv`:
+      individuals, species, and the effective numbers of species and of distinct communities at
+      q = 1, the control against the climate run.
+    - `examples/africa_recorded.jl` draws `recorded.pdf`, the species a cell ends with against the
+      species ever recorded in it, caching the recorded counts in `recorded_richness.csv`.
 - v0.2.0
   - Changed
     - Rebuilt on EcoSISTEM 0.8 and Julia 1.11: the package now decides a projected Africa
