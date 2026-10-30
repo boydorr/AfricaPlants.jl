@@ -14,6 +14,9 @@
       states (`*_end00.jld2`) beside the runs, which it used to open as runs and fail on.
     - CSV 1 is required: the record-cleaning script keeps parse problems quiet with its
       `on_error` keyword. The `examples/` environment declares CSV, DataFrames and Unitful.
+    - EcoSISTEM 0.9 is required. Its `era5requests` puts the box in each ERA5 file's name
+      (`era5_t2m_1940s_40N25W36S56E.nc`), so files fetched under 0.8 are renamed, with the `file` in
+      each provenance record, or `data/src/era5_download.jl` fetches them again.
   - Added
     - `abundance.pdf` and `climate_effect.pdf` from `examples/africa_plots.jl`: the individuals
       each cell holds at the end with and without the changing climate, and their difference in
