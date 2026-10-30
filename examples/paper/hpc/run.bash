@@ -1,12 +1,14 @@
 #!/bin/bash -l
 #
-# One of the paper's runs as a job on one node, threaded: the script named, by default
-# `examples/paper.jl` (the burn-in, then the forward run), configured by the `AFRICA_*` variables of
-# the shell it is submitted from, which `sbatch` passes on. Submit from the root of the clone, once
-# `setup.bash` has run:
+# One stage of the paper's runs as a job on one node, threaded: the script named, configured by the
+# `AFRICA_*` variables of the shell it is submitted from, which `sbatch` passes on. Submit from the
+# root of the clone, once `setup.bash` has run:
 #
-#     AFRICA_CELLSIZE=50km sbatch examples/paper/hpc/run.bash
+#     AFRICA_CELLSIZE=50km sbatch examples/paper/hpc/run.bash examples/paper/burnin.jl
 #     AFRICA_CELLSIZE=50km AFRICA_NEUTRAL=true sbatch examples/paper/hpc/run.bash examples/paper/forward.jl
+#
+# A stage at a time: `examples/paper.jl` runs two in one process, which holds the burn-in's whole
+# ecosystem through the forward run, an abundance array and its layers more than either needs.
 #
 # Always name the cell size: left to choose, a run given a whole node picks a grid finer than the
 # node holds, since the choice counts three `species x cells` arrays and a run that records
@@ -39,7 +41,7 @@ source examples/paper/hpc/env.sh
 set -euo pipefail
 
 ############# THE RUN #############
-script="${1:-examples/paper.jl}"
+script="${1:?name the stage to run, such as examples/paper/burnin.jl}"
 logs="${SLURM_JOB_NAME:-africa}-${SLURM_JOB_ID:-local}"
 
 # Brings the environment up to date with the clone, should it have moved since `setup.bash`, and

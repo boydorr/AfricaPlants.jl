@@ -18,7 +18,7 @@
 #SBATCH --error=%x-%j.err
 #SBATCH --partition=smp           # the partition the runs use, so the compiled code suits its CPUs
 #SBATCH --time=0-03:00:00         # d-hh:mm:ss
-#SBATCH --mem=64G                 # per node
+#SBATCH --mem=128G                # per node; the blessing test peaked at 62 GiB on a laptop
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16        # precompilation tasks, then the blessing test's threads

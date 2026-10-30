@@ -15,7 +15,9 @@
 # Every rank reads the records and builds the same layers, so the memory a run needs is a rank's
 # share of the abundances plus one whole set of layers per rank: run fewer ranks than the memory
 # allows rather than more. Ranks and threads combine - `-n 12` with `julia -t 2` - but a rank's own
-# threads and its neighbours compete for the same cores.
+# threads and its neighbours compete for the same cores. Each stage's globals live on in its module,
+# so the forward run holds the burn-in's share and layers too: at full scale, run the stages
+# separately.
 #
 # MPICH cannot always resolve a Mac's own hostname, and then `MPI.Init` fails with
 # `gethostbyname failed`. Starting the run with `MPIR_CVAR_CH3_INTERFACE_HOSTNAME=127.0.0.1` in the

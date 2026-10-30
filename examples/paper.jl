@@ -13,6 +13,9 @@
 #
 # Threads are what this file is for: the step loop is threaded, so the run takes about as long as
 # one thread's share of it. Started with one thread it says so and runs anyway.
+#
+# Each stage's globals live on in its module, so the forward run holds the burn-in's ecosystem too:
+# at full scale run the stages in a process each, as the jobs in `examples/paper/hpc/` do.
 
 haskey(ENV, "AFRICA_DISTRIBUTED") &&
     error("`examples/paper.jl` sets AFRICA_DISTRIBUTED itself; unset it, or run " *

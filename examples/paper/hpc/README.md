@@ -11,7 +11,7 @@ another machine.
 | `transfer.txt` | what a run reads that the repository does not hold, for `rsync` to copy into the clone |
 | `setup.bash` | the one-off job: the environments instantiated and precompiled, `fetch.jl`, then the blessing test |
 | `fetch.jl` | EarthEnv's land cover and Natural Earth's outline, into EcoSISTEM's cache in the depot |
-| `run.bash` | one run as a job, `examples/paper.jl` by default, configured by the `AFRICA_*` variables it is submitted with |
+| `run.bash` | one stage as a job, the script named, configured by the `AFRICA_*` variables it is submitted with |
 
 ## Once
 
@@ -51,11 +51,15 @@ The run builds the grid and its layers, then adds a row to `diversity_burnin_see
 directory for every simulated year. Once two or more are there, `scancel` it. Its memory every five
 minutes is in `africa-trial-<job ID>.memory`, and afterwards
 `sacct -j <job ID> --format=JobID,MaxRSS,Elapsed,State` gives the peak; `OUT_OF_MEMORY` means
-asking for more with `--mem`.
+asking for more with `--mem`. `MaxRSS` is a high-water mark, and building the layers alone reaches
+about 40 GiB on a laptop even at small scale, so the readings from before the first yearly record
+are the build's: what the run and its recordings need is what rises above them.
 
-A **replicate** is a burn-in and forward run, then the control from the same settled state:
+A **replicate** is a burn-in, then the forward run and the control, which start from the same
+settled state and can run side by side. Each stage is a job of its own, since one process running
+two holds the first's ecosystem through the second:
 
-    AFRICA_CELLSIZE=50km AFRICA_SEED=1 AFRICA_SAVEDIR=$AFRICA_HPC_ROOT/runs/50km \
-        sbatch examples/paper/hpc/run.bash
-    AFRICA_CELLSIZE=50km AFRICA_SEED=1 AFRICA_SAVEDIR=$AFRICA_HPC_ROOT/runs/50km AFRICA_NEUTRAL=true \
-        sbatch --dependency=afterok:<the first job's ID> examples/paper/hpc/run.bash examples/paper/forward.jl
+    export AFRICA_CELLSIZE=50km AFRICA_SEED=1 AFRICA_SAVEDIR=$AFRICA_HPC_ROOT/runs/50km
+    burnin=$(sbatch --parsable examples/paper/hpc/run.bash examples/paper/burnin.jl)
+    sbatch --dependency=afterok:$burnin examples/paper/hpc/run.bash examples/paper/forward.jl
+    AFRICA_NEUTRAL=true sbatch --dependency=afterok:$burnin examples/paper/hpc/run.bash examples/paper/forward.jl
