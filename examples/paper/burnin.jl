@@ -24,7 +24,7 @@
 # | `AFRICA_SEED`     | `1`                   | the replicate: seeds this burn-in's random streams and names what it writes |
 # | `AFRICA_SPECIES_SEED` | `1`               | seeds the species' own draws, the same in every replicate so that they simulate one pool |
 # | `AFRICA_HELD`     | `10`                  | years the first year's climate is repeated       |
-# | `AFRICA_SAVEDIR`  | `./Africa_run`        | where the settled state is written               |
+# | `AFRICA_SAVEDIR`  | `./Africa_run`        | where the settled state is written, made if need be |
 # | `AFRICA_ENVELOPES`| the CEH envelope file | `global_plant_climate_envelopes.csv`, in `data/plant_trait/data/` |
 
 using AfricaPlants
@@ -55,7 +55,8 @@ const DISTRIBUTED = let want = get(ENV, "AFRICA_DISTRIBUTED", "auto")
     want == "serial" ? false :
     error("AFRICA_DISTRIBUTED=$want is not one of auto, mpi, serial")
 end
-const SAVEDIR = get(ENV, "AFRICA_SAVEDIR", joinpath(pwd(), "Africa_run"))
+const SAVEDIR = mkpath(get(ENV, "AFRICA_SAVEDIR",
+                           joinpath(pwd(), "Africa_run")))
 const MONTHS = smallscale() ? 6 : 12 * (2025 - 1940 + 1)
 const HELD = smallscale() ? 1 : parse(Int, get(ENV, "AFRICA_HELD", "10"))
 

@@ -38,6 +38,8 @@
       q = 1, the control against the climate run.
     - `examples/paper/recorded.jl` draws `recorded.pdf`, the species a cell ends with against the
       species ever recorded in it, caching the recorded counts in `recorded_richness.csv`.
+    - `examples/paper/hpc/`: Slurm jobs for running the paper's experiment on MARS, a set-up job
+      ending in the blessing test and a run job that logs its memory, with what to copy there.
     - 25 km, about the climate data's own resolution, is among the cell sizes a run may use, so
       `AFRICA_CELLSIZE=25km` is accepted.
   - Fixed
@@ -45,6 +47,8 @@
       and `width_holdout.csv` named `species_traits.jl`, which both scripts include.
     - A run across MPI ranks no longer warns at every yearly recording that the abundances it measures
       are not normalised, and the root holds one copy of them fewer.
+    - `examples/paper/burnin.jl` makes `AFRICA_SAVEDIR` if it does not exist, rather than failing at its
+      first yearly record.
 - v0.2.0
   - Changed
     - Rebuilt on EcoSISTEM 0.8 and Julia 1.11: the package now decides a projected Africa

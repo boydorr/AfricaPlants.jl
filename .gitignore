@@ -3,3 +3,8 @@
 *.vscode
 *.pptx
 Manifest.toml
+# The HPC jobs' logs, written where they are submitted from (examples/paper/hpc/)
+africa*-*.out
+africa*-*.err
+africa*-*.memory
+africa*-*.Manifest.toml
