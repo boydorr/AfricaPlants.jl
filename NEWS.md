@@ -19,6 +19,8 @@
       each provenance record, or `data/src/era5_download.jl` fetches them again.
     - The published climate envelopes are looked for in `data/plant_trait/`, the dataset as the EIDC
       publishes it; `AFRICA_ENVELOPES` still names another copy.
+    - A run in one process measures its yearly diversity on one snapshot of the landscape, holding
+      one normalised copy of the abundances instead of one per measure; the values are unchanged.
   - Added
     - Blessing tests, in `test/canonical/`: `Pkg.test(test_args = ["canonical"])` runs one
       replicate's small-scale chain on the real data and checks the digests of its inputs and what
@@ -35,6 +37,8 @@
   - Fixed
     - A data script's provenance sidecar names the script that ran: those of `species_widths.csv`
       and `width_holdout.csv` named `species_traits.jl`, which both scripts include.
+    - A run across MPI ranks no longer warns at every yearly recording that the abundances it measures
+      are not normalised, and the root holds one copy of them fewer.
 - v0.2.0
   - Changed
     - Rebuilt on EcoSISTEM 0.8 and Julia 1.11: the package now decides a projected Africa

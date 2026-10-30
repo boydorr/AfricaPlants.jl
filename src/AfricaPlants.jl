@@ -21,7 +21,8 @@ using Random
 using Dates: Dates
 using SparseArrays: SparseArrays
 using JLD2: JLD2
-using Diversity: Diversity, Metacommunity, norm_sub_alpha
+using Diversity: Diversity, Metacommunity, getabundance, getpartition,
+                 gettypes, norm_sub_alpha
 using Statistics: mean, median
 using DimensionalData: DimensionalData
 using NCDatasets: NCDatasets
