@@ -1,0 +1,16 @@
+source = "GBIF simple CSV data/gbif/early/0014628-260903145123482.csv"
+writer = "data/src/gbif_clean.jl"
+basis_of_record = ["HUMAN_OBSERVATION", "MACHINE_OBSERVATION", "MATERIAL_CITATION", "MATERIAL_SAMPLE", "OBSERVATION", "OCCURRENCE", "PRESERVED_SPECIMEN"]
+dropped_near_country_centroid = 6984
+place_files = ["data/centroids.csv", "data/gardens.csv"]
+dropped_greenhouse = 6
+written = "2026-09-14T08:52:06.493"
+flagged_near_garden = 6046
+max_uncertainty_m = 10000.0
+flagged_on_lattice = 5197
+records_seen = 653714
+lattice_deg = 0.25
+bytes = 44059594
+flagged_garden_named = 1016
+records_kept = 547227
+place_buffer_km = 1.0

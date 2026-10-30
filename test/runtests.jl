@@ -52,6 +52,8 @@ include(joinpath(DATASRC, "gardens.jl"))
 include(joinpath(DATASRC, "evi_download.jl"))
 include(joinpath(DATASRC, "evi_mean.jl"))
 include(joinpath(DATASRC, "species_traits.jl"))
+include(joinpath(DATASRC, "species_widths.jl"))
+include(joinpath(DATASRC, "width_holdout.jl"))
 
 using NCDatasets
 using CSV
@@ -222,6 +224,16 @@ end
     @test rec["source"] == "a test" && rec["n"] == 3 && rec["bytes"] == 2
     @test !haskey(rec, "file")
     @test !occursin(homedir(), read(Inventory.provenance_path(out), String))
+    # A script that includes another is the writer, not the one it includes: `width_holdout.jl`
+    # includes `species_widths.jl`, which includes `species_traits.jl`, where `common.jl` is. Each
+    # is included here at top level, as running it would.
+    for (writer, script) in ((SpeciesTraits.write_sidecar, "species_traits.jl"),
+        (SpeciesWidths.write_sidecar, "species_widths.jl"),
+        (WidthHoldout.write_sidecar, "width_holdout.jl"))
+        writer(out, source = "a test")
+        @test TOML.parsefile(Inventory.provenance_path(out))["writer"] ==
+              "data/src/" * script
+    end
 end
 
 @testset "Data scripts: inventory" begin

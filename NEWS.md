@@ -23,6 +23,9 @@
       q = 1, the control against the climate run.
     - `examples/africa_recorded.jl` draws `recorded.pdf`, the species a cell ends with against the
       species ever recorded in it, caching the recorded counts in `recorded_richness.csv`.
+  - Fixed
+    - A data script's provenance sidecar names the script that ran: those of `species_widths.csv`
+      and `width_holdout.csv` named `species_traits.jl`, which both scripts include.
 - v0.2.0
   - Changed
     - Rebuilt on EcoSISTEM 0.8 and Julia 1.11: the package now decides a projected Africa

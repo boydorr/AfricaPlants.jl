@@ -50,8 +50,10 @@ function repopath(path::AbstractString)
     return basename(full)
 end
 
-# The script a provenance record is written by, named from the module `common.jl` was included
-# into, so every sidecar says which file produced it without any script having to say so.
+# The script a provenance record is written by, named from the outermost script module enclosing
+# the one `common.jl` was included into, so every sidecar says which file produced it without any
+# script having to say so: a script that includes another, as `species_widths.jl` includes
+# `species_traits.jl`, is the one that ran.
 const SCRIPTS = Dict("Inventory" => "inventory.jl",
                      "GBIFDownload" => "gbif_download.jl",
                      "GBIFClean" => "gbif_clean.jl",
@@ -61,10 +63,16 @@ const SCRIPTS = Dict("Inventory" => "inventory.jl",
                      "EVIMean" => "evi_mean.jl",
                      "SpeciesTraits" => "species_traits.jl",
                      "SpeciesWidths" => "species_widths.jl",
+                     "WidthHoldout" => "width_holdout.jl",
                      "SeedingGrid" => "seeding_grid.jl")
 function _writer()
-    return "data/src/" * get(SCRIPTS, string(nameof(@__MODULE__)),
-               string(nameof(@__MODULE__)))
+    script = string(nameof(@__MODULE__))
+    m = @__MODULE__
+    while parentmodule(m) !== m
+        m = parentmodule(m)
+        haskey(SCRIPTS, string(nameof(m))) && (script = string(nameof(m)))
+    end
+    return "data/src/" * get(SCRIPTS, script, script)
 end
 
 """
