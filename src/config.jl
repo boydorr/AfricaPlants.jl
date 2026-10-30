@@ -40,7 +40,7 @@ const SCALED_SPECIES = (small = 200, medium = 3000)
 The grid resolutions a run may choose between, finest first. What each costs is asked of
 EcoSISTEM at run time (see [`perspecies_bytes`](@ref)), never written down here.
 """
-const CANDIDATE_CELLSIZES = (5.0km, 10.0km, 20.0km, 50.0km, 100.0km)
+const CANDIDATE_CELLSIZES = (5.0km, 10.0km, 20.0km, 25.0km, 50.0km, 100.0km)
 
 """
     requested_cellsize()

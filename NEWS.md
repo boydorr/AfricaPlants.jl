@@ -34,6 +34,8 @@
       q = 1, the control against the climate run.
     - `examples/africa_recorded.jl` draws `recorded.pdf`, the species a cell ends with against the
       species ever recorded in it, caching the recorded counts in `recorded_richness.csv`.
+    - 25 km, about the climate data's own resolution, is among the cell sizes a run may use, so
+      `AFRICA_CELLSIZE=25km` is accepted.
   - Fixed
     - A data script's provenance sidecar names the script that ran: those of `species_widths.csv`
       and `width_holdout.csv` named `species_traits.jl`, which both scripts include.

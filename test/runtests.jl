@@ -37,6 +37,9 @@ const NUMSPECIES = 20
     withenv("AFRICA_CELLSIZE" => "50km") do
         @test requested_cellsize() == 50.0km
     end
+    withenv("AFRICA_CELLSIZE" => "25.0 km") do
+        @test requested_cellsize() == 25.0km
+    end
     @test africa_within() isa ShapeMaskSpec
     @test africa_within().rule isa AnyOverlap
     @test africa_within().shape isa NaturalEarthSpec
