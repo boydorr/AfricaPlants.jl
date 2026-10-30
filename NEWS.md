@@ -10,8 +10,8 @@
       the burn-in. The species are the same in every replicate (`AFRICA_SPECIES_SEED`).
     - `examples/africa_plots.jl` draws richness on a scale that stops at the 98th percentile of
       cell richness, draws cells that never held an individual in any run as sea rather than as no
-      species, while a cell that lost every plant still shows as empty, and ignores the saved end states (`*_end00.jld2`) beside the runs, which it used to open as
-      runs and fail on.
+      species, while a cell that lost every plant still shows as empty, and ignores the saved end
+      states (`*_end00.jld2`) beside the runs, which it used to open as runs and fail on.
     - CSV 1 is required: the record-cleaning script keeps parse problems quiet with its
       `on_error` keyword. The `examples/` environment declares CSV, DataFrames and Unitful.
   - Added
