@@ -39,22 +39,33 @@ end
 
 const PAPER = joinpath(pkgdir(AfricaPlants), "examples", "paper")
 
-# Julia in the paper's environment on this process's threads, as a job starts it. A child would
-# inherit the load path `Pkg.test` sets, putting this test's environment in place of the paper's.
+# Julia in the paper's environment on this process's threads. A child would inherit the load path
+# `Pkg.test` sets, putting this test's environment in place of the paper's.
 function paperjulia(args)
     return `$(Base.julia_cmd()) --threads=$(Threads.nthreads()) --project=$PAPER $args`
 end
-const OWN_LOAD_PATH = ("JULIA_LOAD_PATH" => nothing, "JULIA_PROJECT" => nothing)
 
-# A stage in a process of its own, as a job runs it, with the settings it reads from the environment
-# set around it.
-function runstage(script, savedir; neutral = false)
-    withenv(OWN_LOAD_PATH..., "AFRICA_SCALE" => "small", "AFRICA_SEED" => "1",
+# The three stages in one process, as `examples/paper.jl` runs its two, so that they are compiled
+# once: each in a module of its own, with the settings it reads from the environment set around it.
+const STAGES = """
+    for (script, neutral) in (("burnin.jl", false), ("forward.jl", false),
+                              ("forward.jl", true))
+        withenv("AFRICA_NEUTRAL" => string(neutral)) do
+            return Base.include(Module(), joinpath($(repr(PAPER)), script))
+        end
+    end
+    """
+
+# The chain run into `savedir`, once the paper's environment is set up.
+function runchain(savedir)
+    withenv("JULIA_LOAD_PATH" => nothing, "JULIA_PROJECT" => nothing,
+            "AFRICA_SCALE" => "small", "AFRICA_SEED" => "1",
             "AFRICA_SPECIES_SEED" => "1", "AFRICA_SAVEDIR" => savedir,
             "AFRICA_SAVEEND" => "false", "AFRICA_DISTRIBUTED" => "serial",
-            "AFRICA_NEUTRAL" => string(neutral), "AFRICA_CELLSIZE" => nothing,
-            "AFRICA_START" => nothing, "AFRICA_HELD" => nothing) do
-        return run(paperjulia(joinpath(PAPER, script)))
+            "AFRICA_CELLSIZE" => nothing, "AFRICA_START" => nothing,
+            "AFRICA_HELD" => nothing) do
+        run(paperjulia(`-e "using Pkg; Pkg.instantiate()"`))
+        return run(paperjulia(`-e $STAGES`))
     end
 end
 
@@ -70,13 +81,8 @@ end
         end
         canonical("chain/input/era5", era5digest(era5))
 
-        withenv(OWN_LOAD_PATH...) do
-            return run(paperjulia(`-e "using Pkg; Pkg.instantiate()"`))
-        end
         dir = mktempdir()
-        runstage("burnin.jl", dir)
-        runstage("forward.jl", dir)
-        runstage("forward.jl", dir, neutral = true)
+        runchain(dir)
 
         # Each stage's yearly record: a row per year, measure and order, the landscape's totals
         # repeated on every row of a year.
