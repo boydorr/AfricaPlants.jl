@@ -25,7 +25,7 @@
 # | `AFRICA_SPECIES_SEED` | `1`               | seeds the species' own draws, the same in every replicate so that they simulate one pool |
 # | `AFRICA_HELD`     | `10`                  | years the first year's climate is repeated       |
 # | `AFRICA_SAVEDIR`  | `./Africa_run`        | where the settled state is written               |
-# | `AFRICA_ENVELOPES`| the CEH envelope file | `global_plant_climate_envelopes.csv`             |
+# | `AFRICA_ENVELOPES`| the CEH envelope file | `global_plant_climate_envelopes.csv`, in `data/plant_trait/data/` |
 
 using AfricaPlants
 using EcoSISTEM
@@ -41,7 +41,8 @@ MPI.Initialized() || MPI.Init()
 const ISROOT = MPI.Comm_rank(MPI.COMM_WORLD) == 0
 const DATA = joinpath(pkgdir(AfricaPlants), "data")
 const ENVELOPES = get(ENV, "AFRICA_ENVELOPES",
-                      expanduser("~/git/plant_trait/data/global_plant_climate_envelopes.csv"))
+                      joinpath(DATA, "plant_trait", "data",
+                               "global_plant_climate_envelopes.csv"))
 const SEED = parse(Int, get(ENV, "AFRICA_SEED", "1"))
 # The species are the same in every replicate, so that every replicate can start from one settled
 # state: their own draws take this seed and the run's random streams take `SEED`.

@@ -31,7 +31,8 @@ using Statistics
 const SAVEDIR = get(ENV, "AFRICA_SAVEDIR", joinpath(pwd(), "Africa_run"))
 const DATA = joinpath(pkgdir(AfricaPlants), "data")
 const ENVELOPES = get(ENV, "AFRICA_ENVELOPES",
-                      expanduser("~/git/plant_trait/data/global_plant_climate_envelopes.csv"))
+                      joinpath(DATA, "plant_trait", "data",
+                               "global_plant_climate_envelopes.csv"))
 const CACHE = joinpath(SAVEDIR, "recorded_richness.csv")
 
 """

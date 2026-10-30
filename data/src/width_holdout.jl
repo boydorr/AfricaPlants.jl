@@ -42,7 +42,8 @@ const STRENGTHS = (0.0, 0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 12.0, 20.0, 30.0, 50.0,
                    100.0,
                    1000.0)
 const ENVELOPES = get(ENV, "AFRICA_ENVELOPES",
-                      expanduser("~/git/plant_trait/data/global_plant_climate_envelopes.csv"))
+                      joinpath(datadir(), "plant_trait", "data",
+                               "global_plant_climate_envelopes.csv"))
 
 # The distance over the ground between two records, in km, flat at the scale of a species' records.
 function _apart(lat1, lon1, lat2, lon2)

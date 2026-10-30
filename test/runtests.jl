@@ -3,7 +3,8 @@
 # Smoke test: a small synthetic species pool on the real Africa grid at the coarsest
 # resolution, run for a year. Reads WorldClim's annual mean temperature (cached after the first
 # download) to position the grid, since a study area made only of synthetic layers cannot be
-# placed by a named region.
+# placed by a named region. `Pkg.test(test_args = ["canonical"])` runs the blessing test on the real
+# data instead: see `canonical/README.md`.
 
 module TestAfrica
 
@@ -14,6 +15,14 @@ using EcoSISTEM.Units
 using Unitful
 using Unitful.DefaultSymbols
 using RasterDataSources
+
+include(joinpath(@__DIR__, "canonical", "canonical.jl"))
+using .Canonical
+
+if "canonical" in ARGS
+    include(joinpath(@__DIR__, "canonical", "test_chain.jl"))
+    exit()
+end
 
 ENV["AFRICA_SCALE"] = "small"
 
@@ -107,7 +116,8 @@ end
     requests = ERA5Download.requests(dir, lastyear = 2025)
     @test length(requests) == length(ERA5Download.CODES) == 4
     @test [basename(r.path) for r in requests[1]] ==
-          [["era5_t2m_$(d)s.nc" for d in 1940:10:2010]; "era5_t2m_2020-2025.nc"]
+          [["era5_t2m_$(d)s_40N25W36S56E.nc" for d in 1940:10:2010]
+           "era5_t2m_2020-2025_40N25W36S56E.nc"]
     tp = requests[2][2]
     @test tp.dataset == "reanalysis-era5-single-levels-monthly-means"
     @test tp.request["variable"] == ["total_precipitation"]
@@ -504,6 +514,11 @@ end
                             demandaxis = SolarRadiation, dispersal = 150.0km,
                             abundance = 10^5, seed = 1)
     eco = build_ecosystem(species, environment, seed = 1)
+    # Blessed (`canonical/README.md`): the grid and where the build put the founders, as this run's
+    # input, then what a year makes of them.
+    canonical("smoke/active_cells", count(environment.active))
+    canonical("smoke/start_occupied",
+              count(>(0), sum(eco.abundances.matrix, dims = 1)))
     simulate!(eco, 1year - 1month_mean_duration, 1month_mean_duration)
     @test sum(eco.abundances.matrix) > 0
     @test count(>(0), sum(eco.abundances.matrix, dims = 2)) > 0
@@ -512,6 +527,9 @@ end
     @test totals.species == vec(sum(eco.abundances.matrix, dims = 2))
     @test totals.cells == vec(sum(eco.abundances.matrix, dims = 1))
     @test sum(totals.species) == sum(totals.cells) == population(eco).total
+    canonical("smoke/by_species", totals.species)
+    canonical("smoke/surviving", count(>(0), totals.species))
+    canonical("smoke/occupied_cells", count(>(0), totals.cells))
 end
 
 @testset "The species pool" begin
@@ -575,7 +593,8 @@ end
     # which puts a species of typical breadth at a suitability of one at its optimum.
     widths_file = joinpath(pkgdir(AfricaPlants), "data", "species_widths.csv")
     envelopes_file = get(ENV, "AFRICA_ENVELOPES",
-                         expanduser("~/git/plant_trait/data/global_plant_climate_envelopes.csv"))
+                         joinpath(pkgdir(AfricaPlants), "data", "plant_trait",
+                                  "data", "global_plant_climate_envelopes.csv"))
     if isfile(widths_file) && isfile(envelopes_file)
         pool = species_pool(CSV.read(envelopes_file, DataFrame),
                             CSV.read(widths_file, DataFrame)).pool

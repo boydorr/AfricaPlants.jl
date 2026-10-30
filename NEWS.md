@@ -17,7 +17,13 @@
     - EcoSISTEM 0.9 is required. Its `era5requests` puts the box in each ERA5 file's name
       (`era5_t2m_1940s_40N25W36S56E.nc`), so files fetched under 0.8 are renamed, with the `file` in
       each provenance record, or `data/src/era5_download.jl` fetches them again.
+    - The published climate envelopes are looked for in `data/plant_trait/`, the dataset as the EIDC
+      publishes it; `AFRICA_ENVELOPES` still names another copy.
   - Added
+    - Blessing tests, in `test/canonical/`: `Pkg.test(test_args = ["canonical"])` runs one
+      replicate's small-scale chain on the real data and checks the digests of its inputs and what
+      it produced against `reference.toml`, and the unit suite checks its one-year run the same way;
+      `AFRICA_BLESS=true` re-blesses.
     - `abundance.pdf` and `climate_effect.pdf` from `examples/africa_plots.jl`: the individuals
       each cell holds at the end with and without the changing climate, and their difference in
       individuals.

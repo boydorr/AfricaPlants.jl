@@ -42,7 +42,8 @@ MPI.Initialized() || MPI.Init()
 const ISROOT = MPI.Comm_rank(MPI.COMM_WORLD) == 0
 const DATA = joinpath(pkgdir(AfricaPlants), "data")
 const ENVELOPES = get(ENV, "AFRICA_ENVELOPES",
-                      expanduser("~/git/plant_trait/data/global_plant_climate_envelopes.csv"))
+                      joinpath(DATA, "plant_trait", "data",
+                               "global_plant_climate_envelopes.csv"))
 const SEED = parse(Int, get(ENV, "AFRICA_SEED", "1"))
 # The species are the same in every replicate, so that every replicate can start from one settled
 # state: their own draws take this seed and the run's random streams take `SEED`.
