@@ -6,6 +6,12 @@
 # some years under the first year's climate repeated. Writes the settled state for
 # `africa_forward.jl`.
 #
+# Every replicate runs its own burn-in, so that nothing in the results rests on one realisation of
+# it: with `AFRICA_SEED=2` this writes `burnin_seed2_00.jld2` and `start_seed2_00.jld2` beside seed
+# 1's, and `examples/africa_forward.jl` with the same seed starts from them. The species themselves
+# are the same in every replicate (`AFRICA_SPECIES_SEED`), so what varies is the simulation's
+# randomness and not the pool it simulates.
+#
 #     AFRICA_SCALE=small julia --project examples/africa_burnin.jl
 #     julia -t 8 --project examples/africa_burnin.jl
 #     mpiexecjl --project -n 8 julia --project examples/africa_burnin.jl
@@ -15,8 +21,8 @@
 # | `AFRICA_SCALE`    | `large`               | `small`: 200 species, the coarsest grid, 6 months back and 1 year held; `medium`: 3,000 species across every level of recording, the coarsest grid, the full span |
 # | `AFRICA_CELLSIZE` | chosen                | `50km` to override the memory-based choice       |
 # | `AFRICA_DISTRIBUTED` | `auto`             | `serial` or `mpi` to demand one                  |
-# | `AFRICA_SEED`     | `1`                   | seeds the run's random streams                   |
-# | `AFRICA_SPECIES_SEED` | `1`               | seeds the species' own draws; the same in every run of an experiment |
+# | `AFRICA_SEED`     | `1`                   | the replicate: seeds this burn-in's random streams and names what it writes |
+# | `AFRICA_SPECIES_SEED` | `1`               | seeds the species' own draws, the same in every replicate so that they simulate one pool |
 # | `AFRICA_HELD`     | `10`                  | years the first year's climate is repeated       |
 # | `AFRICA_SAVEDIR`  | `./Africa_run`        | where the settled state is written               |
 # | `AFRICA_ENVELOPES`| the CEH envelope file | `global_plant_climate_envelopes.csv`             |
@@ -148,13 +154,14 @@ started = time()
         report("burn-in: $(back) years back", now, time() - started)
     return nothing
 end
-SaveAbundance(SAVEDIR, "burnin")(eco, (count = 1,))
+SaveAbundance(SAVEDIR, "burnin_seed$(SEED)_")(eco, (count = 1,))
 save_totals("burnin", backwards_totals)
 
 # The first year's climate repeated, from the state the backwards run reached.
 held = africa_ecosystem(species, area, HeldClimateYear(1940), seed = SEED,
                         distributed = DISTRIBUTED)
-backwards = load_abundances(joinpath(SAVEDIR, "burnin00.jld2"))
+backwards = load_abundances(joinpath(SAVEDIR,
+                                     "burnin_seed$(SEED)_00.jld2"))
 continue_from!(held, backwards,
                provenance = gbif_record("records_africa.csv"))
 held_totals = totals(held, HELD)
@@ -168,6 +175,7 @@ started = time()
     report("held climate: year $(year) of $(HELD)", now, time() - started)
     return nothing
 end
-SaveAbundance(SAVEDIR, "start")(held, (count = 1,))
+SaveAbundance(SAVEDIR, "start_seed$(SEED)_")(held, (count = 1,))
 save_totals("hold", held_totals)
-say("settled state written to ", joinpath(SAVEDIR, "start00.jld2"))
+say("settled state written to ",
+    joinpath(SAVEDIR, "start_seed$(SEED)_00.jld2"))

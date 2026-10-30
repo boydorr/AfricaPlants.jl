@@ -4,9 +4,10 @@
 # in calendar order, recording normalised subcommunity alpha diversity in every cell each 1 January,
 # with each species' and each cell's individuals.
 # One replicate per seed; `AFRICA_NEUTRAL=true` repeats the 1940 climate throughout instead, the
-# neutral control. Every replicate starts from the one settled state and holds the same species,
-# built from `AFRICA_SPECIES_SEED`; `AFRICA_SEED` seeds only the run's random streams. A control is
-# the comparison for the forward run of the **same seed**, from which it differs only in climate. Each year both write the whole landscape's diversity to
+# neutral control. A replicate is a burn-in, a forward run and a control that share one `AFRICA_SEED`
+# and so one settled state, `AFRICA_SPECIES_SEED` holding the species themselves the same throughout;
+# the control differs from its forward run only in climate. Another seed repeats the whole
+# experiment, its own burn-in included, so that no result rests on a single settled state. Each year both write the whole landscape's diversity to
 # `diversity_<forward|neutral>_seed<N>.csv` beside the per-cell diversity they save at the end.
 #
 #     AFRICA_SCALE=small julia --project examples/africa_forward.jl
@@ -21,7 +22,7 @@
 # | `AFRICA_SPECIES_SEED` | `1`        | seeds the species' own draws, as the burn-in's did       |
 # | `AFRICA_NEUTRAL`  | `false`        | `true` to repeat the 1940 climate                        |
 # | `AFRICA_SAVEDIR`  | `./Africa_run` | where the settled state is read and the diversity written |
-# | `AFRICA_START`    | `start00.jld2` | the settled state in `AFRICA_SAVEDIR` to start from       |
+# | `AFRICA_START`    | `start_seed<N>_00.jld2` | the settled state in `AFRICA_SAVEDIR` to start from: this seed's own burn-in |
 # | `AFRICA_SAVEEND`  | `true`         | `false` to skip saving the state the run ends in, which is as large as the settled state it started from |
 # | `AFRICA_ENVELOPES`| the CEH file   | as for the burn-in                                       |
 
@@ -56,7 +57,7 @@ const DISTRIBUTED = let want = get(ENV, "AFRICA_DISTRIBUTED", "auto")
 end
 const NEUTRAL = get(ENV, "AFRICA_NEUTRAL", "false") == "true"
 const SAVEDIR = get(ENV, "AFRICA_SAVEDIR", joinpath(pwd(), "Africa_run"))
-const START = get(ENV, "AFRICA_START", "start00.jld2")
+const START = get(ENV, "AFRICA_START", "start_seed$(SEED)_00.jld2")
 const SAVEEND = get(ENV, "AFRICA_SAVEEND", "true") == "true"
 const YEARS = smallscale() ? 1 : 2025 - 1940 + 1
 

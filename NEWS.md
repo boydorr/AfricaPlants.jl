@@ -4,6 +4,10 @@
   - Changed
     - The package is named `AfricaPlants`, not `Africa`: scripts say `using AfricaPlants`, and the
       `examples/` environment depends on it under that name.
+    - Every replicate runs its own burn-in: `examples/africa_burnin.jl` writes
+      `burnin_seed<N>_00.jld2` and `start_seed<N>_00.jld2`, and `examples/africa_forward.jl` starts
+      from its own seed's settled state by default, so that no result rests on one realisation of
+      the burn-in. The species are the same in every replicate (`AFRICA_SPECIES_SEED`).
     - CSV 1 is required: the record-cleaning script keeps parse problems quiet with its
       `on_error` keyword. The `examples/` environment declares CSV, DataFrames and Unitful.
 - v0.2.0
