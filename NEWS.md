@@ -3,17 +3,21 @@
 - v0.3.0
   - Changed
     - The package is named `AfricaPlants`, not `Africa`: scripts say `using AfricaPlants`, and the
-      `examples/` environment depends on it under that name.
-    - Every replicate runs its own burn-in: `examples/africa_burnin.jl` writes
-      `burnin_seed<N>_00.jld2` and `start_seed<N>_00.jld2`, and `examples/africa_forward.jl` starts
+      paper's environment depends on it under that name.
+    - The paper's run is in `examples/paper/`, its stage and figure scripts sharing one environment,
+      `examples/paper/Project.toml`, and `examples/paper.jl` (was `africa_threads.jl`) sets it off
+      locally; `examples/` keeps the rest (`examples/mpi.jl`). The scripts' names lose their
+      `africa_` prefix.
+    - Every replicate runs its own burn-in: `examples/paper/burnin.jl` writes
+      `burnin_seed<N>_00.jld2` and `start_seed<N>_00.jld2`, and `examples/paper/forward.jl` starts
       from its own seed's settled state by default, so that no result rests on one realisation of
       the burn-in. The species are the same in every replicate (`AFRICA_SPECIES_SEED`).
-    - `examples/africa_plots.jl` draws richness on a scale that stops at the 98th percentile of
+    - `examples/paper/plots.jl` draws richness on a scale that stops at the 98th percentile of
       cell richness, draws cells that never held an individual in any run as sea rather than as no
       species, while a cell that lost every plant still shows as empty, and ignores the saved end
       states (`*_end00.jld2`) beside the runs, which it used to open as runs and fail on.
     - CSV 1 is required: the record-cleaning script keeps parse problems quiet with its
-      `on_error` keyword. The `examples/` environment declares CSV, DataFrames and Unitful.
+      `on_error` keyword.
     - EcoSISTEM 0.9 is required. Its `era5requests` puts the box in each ERA5 file's name
       (`era5_t2m_1940s_40N25W36S56E.nc`), so files fetched under 0.8 are renamed, with the `file` in
       each provenance record, or `data/src/era5_download.jl` fetches them again.
@@ -26,13 +30,13 @@
       replicate's small-scale chain on the real data and checks the digests of its inputs and what
       it produced against `reference.toml`, and the unit suite checks its one-year run the same way;
       `AFRICA_BLESS=true` re-blesses.
-    - `abundance.pdf` and `climate_effect.pdf` from `examples/africa_plots.jl`: the individuals
+    - `abundance.pdf` and `climate_effect.pdf` from `examples/paper/plots.jl`: the individuals
       each cell holds at the end with and without the changing climate, and their difference in
       individuals.
-    - `examples/africa_series.jl` draws `timeseries.pdf` from the yearly `diversity_*.csv`:
+    - `examples/paper/series.jl` draws `timeseries.pdf` from the yearly `diversity_*.csv`:
       individuals, species, and the effective numbers of species and of distinct communities at
       q = 1, the control against the climate run.
-    - `examples/africa_recorded.jl` draws `recorded.pdf`, the species a cell ends with against the
+    - `examples/paper/recorded.jl` draws `recorded.pdf`, the species a cell ends with against the
       species ever recorded in it, caching the recorded counts in `recorded_richness.csv`.
     - 25 km, about the climate data's own resolution, is among the cell sizes a run may use, so
       `AFRICA_CELLSIZE=25km` is accepted.

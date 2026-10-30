@@ -3,7 +3,7 @@
 # Simulating the plant species of Africa with EcoSISTEM: case study 2 of the EcoSISTEM paper,
 # rebuilt on the current package. The module holds what every run shares - the configuration
 # read from the environment, the continent as a study area, and the choice of a resolution the
-# machine can afford. The experiment scripts under `examples/` drive it.
+# machine can afford. The paper's experiment scripts under `examples/paper/` drive it.
 
 module AfricaPlants
 

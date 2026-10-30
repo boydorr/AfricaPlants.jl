@@ -6,7 +6,7 @@
 # under a century of dynamics, and that the model puts species where a cell can hold them rather than
 # only where somebody looked. Both are questions about the scatter, not the map.
 #
-#     julia --project=examples examples/africa_recorded.jl
+#     julia --project=examples/paper examples/paper/recorded.jl
 #
 # | variable         | default        | meaning                                         |
 # |------------------|----------------|-------------------------------------------------|

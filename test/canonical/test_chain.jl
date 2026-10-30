@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 #
 # The blessing test on the real data: the small-scale chain of one replicate - the backwards burn-in
-# and its held year, then the forward run and its control, seed 1 - run by the drivers in `examples/`
-# on the ERA5 months, records, widths, seeding grid and envelopes on this machine. It blesses what the
-# chain was built from, as the SHA-256 of each input, and what it produced: each stage's yearly
-# individuals, species, largest species and diversity, and each run's species totals at the end.
+# and its held year, then the forward run and its control, seed 1 - run by the paper's stage scripts
+# in `examples/paper/`, in that directory's environment, on the ERA5 months, records, widths, seeding
+# grid and envelopes on this machine. It blesses what the chain was built from, as the SHA-256 of
+# each input, and what it produced: each stage's yearly individuals, species, largest species and
+# diversity, and each run's species totals at the end.
 # Skipped where the data is not here, as on CI. Run with `Pkg.test(test_args = ["canonical"])`; see
 # README.md in this directory.
 
@@ -36,16 +37,24 @@ function era5digest(dir)
     return bytes2hex(sha256(join(filedigest(joinpath(dir, f)) for f in files)))
 end
 
-# A driver run as `examples/africa_threads.jl` runs one, in a module of its own, with the settings it
-# reads from the environment set around it.
+const PAPER = joinpath(pkgdir(AfricaPlants), "examples", "paper")
+
+# Julia in the paper's environment on this process's threads, as a job starts it. A child would
+# inherit the load path `Pkg.test` sets, putting this test's environment in place of the paper's.
+function paperjulia(args)
+    return `$(Base.julia_cmd()) --threads=$(Threads.nthreads()) --project=$PAPER $args`
+end
+const OWN_LOAD_PATH = ("JULIA_LOAD_PATH" => nothing, "JULIA_PROJECT" => nothing)
+
+# A stage in a process of its own, as a job runs it, with the settings it reads from the environment
+# set around it.
 function runstage(script, savedir; neutral = false)
-    withenv("AFRICA_SCALE" => "small", "AFRICA_SEED" => "1",
+    withenv(OWN_LOAD_PATH..., "AFRICA_SCALE" => "small", "AFRICA_SEED" => "1",
             "AFRICA_SPECIES_SEED" => "1", "AFRICA_SAVEDIR" => savedir,
             "AFRICA_SAVEEND" => "false", "AFRICA_DISTRIBUTED" => "serial",
             "AFRICA_NEUTRAL" => string(neutral), "AFRICA_CELLSIZE" => nothing,
             "AFRICA_START" => nothing, "AFRICA_HELD" => nothing) do
-        return Base.include(Module(),
-                            joinpath(pkgdir(AfricaPlants), "examples", script))
+        return run(paperjulia(joinpath(PAPER, script)))
     end
 end
 
@@ -61,10 +70,13 @@ end
         end
         canonical("chain/input/era5", era5digest(era5))
 
+        withenv(OWN_LOAD_PATH...) do
+            return run(paperjulia(`-e "using Pkg; Pkg.instantiate()"`))
+        end
         dir = mktempdir()
-        runstage("africa_burnin.jl", dir)
-        runstage("africa_forward.jl", dir)
-        runstage("africa_forward.jl", dir, neutral = true)
+        runstage("burnin.jl", dir)
+        runstage("forward.jl", dir)
+        runstage("forward.jl", dir, neutral = true)
 
         # Each stage's yearly record: a row per year, measure and order, the landscape's totals
         # repeated on every row of a year.

@@ -4,7 +4,7 @@
 # holds, the species still alive, and the diversity partition at order 1 - the effective number of
 # species over the continent, and the effective number of distinct communities its cells make up.
 #
-#     julia --project=examples examples/africa_series.jl
+#     julia --project=examples/paper examples/paper/series.jl
 #
 # | variable         | default        | meaning                                         |
 # |------------------|----------------|-------------------------------------------------|

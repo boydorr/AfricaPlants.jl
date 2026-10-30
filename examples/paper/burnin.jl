@@ -3,18 +3,18 @@
 # The backwards burn-in: every Africa species with an envelope and widths, filled from the occurrence
 # records to what each cell's resources hold at the last month of the climate, run back through the
 # ERA5 months to the first while each record is added at the month it was made, then settled for
-# some years under the first year's climate repeated. Writes the settled state for
-# `africa_forward.jl`.
+# some years under the first year's climate repeated. Writes the settled state for `forward.jl`.
 #
 # Every replicate runs its own burn-in, so that nothing in the results rests on one realisation of
 # it: with `AFRICA_SEED=2` this writes `burnin_seed2_00.jld2` and `start_seed2_00.jld2` beside seed
-# 1's, and `examples/africa_forward.jl` with the same seed starts from them. The species themselves
+# 1's, and `examples/paper/forward.jl` with the same seed starts from them. The species themselves
 # are the same in every replicate (`AFRICA_SPECIES_SEED`), so what varies is the simulation's
 # randomness and not the pool it simulates.
 #
-#     AFRICA_SCALE=small julia --project examples/africa_burnin.jl
-#     julia -t 8 --project examples/africa_burnin.jl
-#     mpiexecjl --project -n 8 julia --project examples/africa_burnin.jl
+#     AFRICA_SCALE=small julia --project=examples/paper examples/paper/burnin.jl
+#     julia -t 8 --project=examples/paper examples/paper/burnin.jl
+#     mpiexecjl --project=examples/paper -n 8 \
+#         julia --project=examples/paper examples/paper/burnin.jl
 #
 # | variable          | default               | meaning                                          |
 # |-------------------|-----------------------|--------------------------------------------------|

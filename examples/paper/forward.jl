@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 #
-# The forward run: the settled state `africa_burnin.jl` wrote, run from 1940 through the ERA5 months
+# The forward run: the settled state `burnin.jl` wrote, run from 1940 through the ERA5 months
 # in calendar order, recording normalised subcommunity alpha diversity in every cell each 1 January,
 # with each species' and each cell's individuals.
 # One replicate per seed; `AFRICA_NEUTRAL=true` repeats the 1940 climate throughout instead, the
@@ -10,8 +10,9 @@
 # experiment, its own burn-in included, so that no result rests on a single settled state. Each year both write the whole landscape's diversity to
 # `diversity_<forward|neutral>_seed<N>.csv` beside the per-cell diversity they save at the end.
 #
-#     AFRICA_SCALE=small julia --project examples/africa_forward.jl
-#     AFRICA_SEED=2 mpiexecjl --project -n 8 julia --project examples/africa_forward.jl
+#     AFRICA_SCALE=small julia --project=examples/paper examples/paper/forward.jl
+#     AFRICA_SEED=2 mpiexecjl --project=examples/paper -n 8 \
+#         julia --project=examples/paper examples/paper/forward.jl
 #
 # | variable          | default        | meaning                                                  |
 # |-------------------|----------------|----------------------------------------------------------|

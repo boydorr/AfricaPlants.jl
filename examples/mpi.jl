@@ -2,12 +2,14 @@
 #
 # The whole experiment across MPI ranks, which divide the species between them: the backwards
 # burn-in and the years of held climate that settle it, then the forward run recording diversity.
-# `examples/africa_threads.jl` is the same experiment in one process.
+# `examples/paper.jl` is the same experiment in one process, the way the paper runs it; this runs
+# the paper's stages from `examples/paper/`, in its environment.
 #
-#     mpiexecjl --project=. -n 12 julia --project=. examples/africa_mpi.jl
-#     AFRICA_SCALE=small mpiexecjl --project=. -n 2 julia --project=. examples/africa_mpi.jl
+#     mpiexecjl --project=examples/paper -n 12 julia --project=examples/paper examples/mpi.jl
+#     AFRICA_SCALE=small mpiexecjl --project=examples/paper -n 2 \
+#         julia --project=examples/paper examples/mpi.jl
 #
-# The environment variables are `examples/africa_burnin.jl`'s and `examples/africa_forward.jl`'s,
+# The environment variables are `examples/paper/burnin.jl`'s and `examples/paper/forward.jl`'s,
 # which this runs in turn; `AFRICA_DISTRIBUTED` is set here and must not be.
 #
 # Every rank reads the records and builds the same layers, so the memory a run needs is a rank's
@@ -20,16 +22,16 @@
 # environment tells it to use the loopback interface instead.
 
 haskey(ENV, "AFRICA_DISTRIBUTED") &&
-    error("`examples/africa_mpi.jl` sets AFRICA_DISTRIBUTED itself; unset it, or run " *
-          "`examples/africa_burnin.jl` and `examples/africa_forward.jl` directly.")
+    error("`examples/mpi.jl` sets AFRICA_DISTRIBUTED itself; unset it, or run " *
+          "`examples/paper/burnin.jl` and `examples/paper/forward.jl` directly.")
 ENV["AFRICA_DISTRIBUTED"] = "mpi"
 
 using MPI
 MPI.Initialized() || MPI.Init()
 const RANKS = MPI.Comm_size(MPI.COMM_WORLD)
 RANKS > 1 ||
-    error("`examples/africa_mpi.jl` is for a multi-rank run: start it with `mpiexecjl -n <ranks>`, " *
-          "or use `examples/africa_threads.jl` for one process.")
+    error("`examples/mpi.jl` is for a multi-rank run: start it with `mpiexecjl -n <ranks>`, " *
+          "or use `examples/paper.jl` for one process.")
 MPI.Comm_rank(MPI.COMM_WORLD) == 0 &&
     (
      println("Africa across ", RANKS, " MPI ranks of ", Threads.nthreads(),
@@ -39,9 +41,9 @@ MPI.Comm_rank(MPI.COMM_WORLD) == 0 &&
 # Each stage is a script of its own, so each goes in its own module: they name the same constants,
 # and a bare `include` of both would redefine them.
 module Burnin
-include("africa_burnin.jl")
+include(joinpath("paper", "burnin.jl"))
 end
 
 module Forward
-include("africa_forward.jl")
+include(joinpath("paper", "forward.jl"))
 end

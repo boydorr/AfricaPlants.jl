@@ -12,7 +12,7 @@
 # cell holds at the end under the changing climate and under the held climate, and, on its own, the
 # difference between them in individuals. This is where a century of climate shows itself.
 #
-#     julia --project=examples examples/africa_plots.jl
+#     julia --project=examples/paper examples/paper/plots.jl
 #
 # | variable         | default        | meaning                                         |
 # |------------------|----------------|-------------------------------------------------|
@@ -48,7 +48,7 @@ function load_runs(kind::AbstractString)
     for r in runs
         haskey(r, "cell_totals") ||
             error("$(kind) runs in $(SAVEDIR) predate the per-cell totals; rerun them with the " *
-                  "current `examples/africa_forward.jl`")
+                  "current `examples/paper/forward.jl`")
         (r["shape"] == runs[1]["shape"] && r["years"] == runs[1]["years"]) ||
             error("the $(kind) runs in $(SAVEDIR) are not all on one grid and span")
     end
