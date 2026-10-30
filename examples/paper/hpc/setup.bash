@@ -43,6 +43,9 @@ done < examples/paper/hpc/transfer.txt
 [ "$missing" = 0 ] || exit 1
 
 ############# SET-UP #############
+# The depot may be one other jobs set up earlier, its copy of the registry as old as theirs: one that
+# does not know the manifests' versions makes the blessing test re-resolve to older ones.
+julia -e 'using Pkg; Pkg.Registry.update()'
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 julia --project=examples/paper -e 'using Pkg; Pkg.instantiate()'
 julia --project=examples/paper examples/paper/hpc/fetch.jl
