@@ -40,6 +40,9 @@
       species ever recorded in it, caching the recorded counts in `recorded_richness.csv`.
     - `examples/paper/hpc/`: Slurm jobs for running the paper's experiment on MARS, a set-up job
       ending in the blessing test and a run job that logs its memory, with what to copy there.
+    - `examples/paper/pipeline.jl`, with `burnin.yaml` and `forward.yaml`, runs a stage as a data
+      pipeline run, registering its outputs as `CaseStudy/<grid>/<Stage>/<Output>_<seed>`; the MARS
+      jobs set up the pipeline and run stages that way.
     - 25 km, about the climate data's own resolution, is among the cell sizes a run may use, so
       `AFRICA_CELLSIZE=25km` is accepted.
   - Fixed

@@ -8,3 +8,5 @@ africa*-*.out
 africa*-*.err
 africa*-*.memory
 africa*-*.Manifest.toml
+# Where `fair init` keeps a clone's data pipeline configuration (examples/paper/hpc/setup.jl)
+/.fair

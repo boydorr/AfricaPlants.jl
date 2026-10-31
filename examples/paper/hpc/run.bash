@@ -1,11 +1,16 @@
 #!/bin/bash -l
 #
-# One stage of the paper's runs as a job on one node, threaded: the script named, configured by the
-# `AFRICA_*` variables of the shell it is submitted from, which `sbatch` passes on. Submit from the
-# root of the clone, once `setup.bash` has run:
+# One stage of the paper's runs as a job on one node, threaded, configured by the `AFRICA_*`
+# variables of the shell it is submitted from, which `sbatch` passes on. Named by its pipeline
+# config, the stage is a data pipeline run, its outputs registered in the local registry, which the
+# job starts and stops; named by its script, it is a plain run. Submit from the root of the clone,
+# once `setup.bash` has run:
 #
-#     AFRICA_CELLSIZE=50km sbatch examples/paper/hpc/run.bash examples/paper/burnin.jl
-#     AFRICA_CELLSIZE=50km AFRICA_NEUTRAL=true sbatch examples/paper/hpc/run.bash examples/paper/forward.jl
+#     AFRICA_CELLSIZE=50km sbatch examples/paper/hpc/run.bash examples/paper/burnin.yaml
+#     AFRICA_CELLSIZE=50km AFRICA_NEUTRAL=true sbatch examples/paper/hpc/run.bash examples/paper/forward.yaml
+#     AFRICA_CELLSIZE=25km sbatch examples/paper/hpc/run.bash examples/paper/burnin.jl
+#
+# A pipeline run records the commit it ran: the clone must be clean and its commit pushed.
 #
 # A stage at a time: `examples/paper.jl` runs two in one process, which holds the burn-in's whole
 # ecosystem through the forward run, an abundance array and its layers more than either needs.
@@ -31,6 +36,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=128       # Julia threads
 #SBATCH --threads-per-core=1
+#SBATCH --dependency=singleton    # one job of a name at a time: the registry runs on one node at a time
 
 ############# ENVIRONMENT #############
 if [ ! -f examples/paper/hpc/env.sh ]; then
@@ -41,7 +47,7 @@ source examples/paper/hpc/env.sh
 set -euo pipefail
 
 ############# THE RUN #############
-script="${1:?name the stage to run, such as examples/paper/burnin.jl}"
+stage="${1:?name the stage to run, such as examples/paper/burnin.yaml}"
 logs="${SLURM_JOB_NAME:-africa}-${SLURM_JOB_ID:-local}"
 
 # Brings the environment up to date with the clone, should it have moved since `setup.bash`, and
@@ -49,7 +55,7 @@ logs="${SLURM_JOB_NAME:-africa}-${SLURM_JOB_ID:-local}"
 julia --project=examples/paper -e 'using Pkg; Pkg.instantiate()'
 cp examples/paper/Manifest.toml "$logs.Manifest.toml"
 
-echo "$script, $(date -u +%FT%TZ), on $(hostname)"
+echo "$stage, $(date -u +%FT%TZ), on $(hostname)"
 env | grep '^AFRICA_' | sort
 
 if [ -n "${SLURM_JOB_ID:-}" ] && command -v sstat > /dev/null; then
@@ -61,4 +67,22 @@ if [ -n "${SLURM_JOB_ID:-}" ] && command -v sstat > /dev/null; then
     trap "kill $! 2> /dev/null" EXIT
 fi
 
-julia --project=examples/paper "$script"
+case "$stage" in
+*.yaml)
+    # `pull` takes `--local`, or it would look the namespace up in the remote registry; `run` does
+    # not, so that it checks the commit is on the clone's remote.
+    julia --project=examples/paper -e '
+        using DataPipeline
+        config = only(ARGS)
+        fair"registry start"
+        try
+            fair"pull --local $config"
+            fair"run $config"
+        finally
+            fair"registry stop"
+        end' "$stage"
+    ;;
+*)
+    julia --project=examples/paper "$stage"
+    ;;
+esac

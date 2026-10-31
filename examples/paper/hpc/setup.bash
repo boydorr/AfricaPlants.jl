@@ -2,9 +2,10 @@
 #
 # Set up the paper's runs on an HPC, once: instantiate and precompile the package's and the paper's
 # environments on the kind of node that runs them, fetch what a run downloads for itself
-# (`fetch.jl`), then run the blessing test, which checks the digest of every data file and that this
-# machine, with these versions, gives the blessed values. Submit from the root of the clone, once
-# `transfer.txt`'s files are copied into it:
+# (`fetch.jl`), set up the data pipeline (`setup.jl`), then run the blessing test, which checks the
+# digest of every data file and that this machine, with these versions, gives the blessed values.
+# Submit from the root of the clone, once `transfer.txt`'s files are copied into it and
+# `$AFRICA_HPC_ROOT/fair/user.yaml` is filled in (see `fair-user.yaml`):
 #
 #     sbatch examples/paper/hpc/setup.bash
 #
@@ -49,4 +50,5 @@ julia -e 'using Pkg; Pkg.Registry.update()'
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 julia --project=examples/paper -e 'using Pkg; Pkg.instantiate()'
 julia --project=examples/paper examples/paper/hpc/fetch.jl
+julia --project=examples/paper examples/paper/hpc/setup.jl
 julia --project=. -e 'using Pkg; Pkg.test(test_args = ["canonical"])'
