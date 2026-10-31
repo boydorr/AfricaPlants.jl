@@ -32,19 +32,51 @@ another machine.
    how). EcoSISTEM's paper set-up keeps it in the same place, so on an account that has run it
    there is nothing to do.
 
-4. From the root of the clone, the set-up job:
-
-       sbatch examples/paper/hpc/setup.bash
-
-   It ends with the blessing test, so a pass means the data arrived intact and this machine gives
-   the blessed values. If `fetch.jl` cannot reach EarthEnv or Natural Earth from the compute node,
-   run it on the login node as its header says, and submit the set-up again. To set up the pipeline
-   alone, `source examples/paper/hpc/env.sh` and run
-   `julia --project=examples/paper examples/paper/hpc/setup.jl` on the login node.
-
 `fair` keeps one local registry for each user, and initialising a clone points all of that user's
 clones at the one it names. So this set-up uses the registry, data store and port EcoSISTEM's paper
 set-up uses, under `$AFRICA_HPC_ROOT/fair`, and either finds there what the other made.
+
+## The set-up and a replicate
+
+The set-up job comes first, and again whenever the data, the versions or the code change. It ends
+with the blessing test, about half an hour, so a pass means the data arrived intact and this machine
+gives the blessed values. A **replicate** is then a burn-in, then the forward run and the control,
+which start from the same settled state. Each stage is a job of its own, since one process running
+two holds the first's ecosystem through the second, and they run one after another.
+
+Submitted together, each job waits for the one before it to succeed: Slurm holds it until then
+(`--dependency=afterok:<job ID>`) and never starts it if that one fails. From the root of the clone:
+
+    source examples/paper/hpc/env.sh
+    export AFRICA_CELLSIZE=50km AFRICA_SEED=1 AFRICA_SAVEDIR=$AFRICA_HPC_ROOT/runs/50km
+    setup=$(sbatch --parsable examples/paper/hpc/setup.bash)
+    burnin=$(sbatch --parsable --dependency=afterok:$setup,singleton \
+        examples/paper/hpc/run.bash examples/paper/burnin.yaml)
+    sbatch --dependency=afterok:$burnin,singleton examples/paper/hpc/run.bash examples/paper/forward.yaml
+    AFRICA_NEUTRAL=true sbatch --dependency=afterok:$burnin,singleton \
+        examples/paper/hpc/run.bash examples/paper/forward.yaml
+
+`sbatch --parsable` prints only the job's ID, which the lines after it wait on. The forward run and
+the control both wait on the burn-in, and `singleton` - no job starts while another of the same name
+is running - keeps them from running at once, so the registry is never running on two nodes: each
+job starts it and stops it, and whichever Slurm takes first, the other follows. A job of another
+name, EcoSISTEM's included, is not held back by it. A later replicate changes `AFRICA_SEED` and
+leaves out the set-up and the burn-in's wait on it. A job whose dependency failed stays queued,
+`DependencyNeverSatisfied` in `squeue --me`: `scancel` it.
+
+**One step at a time** - each job submitted once the one before has finished and its logs look right -
+it is the same commands without the variables and the `--dependency` flags:
+
+    source examples/paper/hpc/env.sh
+    export AFRICA_CELLSIZE=50km AFRICA_SEED=1 AFRICA_SAVEDIR=$AFRICA_HPC_ROOT/runs/50km
+    sbatch examples/paper/hpc/setup.bash
+    sbatch examples/paper/hpc/run.bash examples/paper/burnin.yaml
+    sbatch examples/paper/hpc/run.bash examples/paper/forward.yaml
+    AFRICA_NEUTRAL=true sbatch examples/paper/hpc/run.bash examples/paper/forward.yaml
+
+If `fetch.jl` cannot reach EarthEnv or Natural Earth from the compute node, run it on the login node
+as its header says, and submit the set-up again. To set up the pipeline alone, run
+`julia --project=examples/paper examples/paper/hpc/setup.jl` on the login node after `env.sh`.
 
 ## Runs
 
@@ -62,8 +94,9 @@ replaces that, so add `singleton` to it. A job Slurm kills cannot stop the regis
 recorded on that job's node; the next job is refused with a message naming the record to delete.
 What a run registered stays in the registry on MARS until it is pushed.
 
-The **25 km trial** measures the memory a full-scale run needs: the burn-in at 25 km, stopped after
-its first yearly records.
+A **plain run** - `run.bash` given a script - registers nothing. The **25 km trial** was one: it
+measured the memory a full-scale run needs, the burn-in at 25 km stopped after its first yearly
+records.
 
     source examples/paper/hpc/env.sh
     AFRICA_CELLSIZE=25km AFRICA_SAVEDIR=$AFRICA_HPC_ROOT/runs/trial-25km \
@@ -76,13 +109,3 @@ minutes is in `africa-trial-<job ID>.memory`, and afterwards
 asking for more with `--mem`. `MaxRSS` is a high-water mark, and building the layers alone reaches
 about 40 GiB on a laptop even at small scale, so the readings from before the first yearly record
 are the build's: what the run and its recordings need is what rises above them.
-
-A **replicate** is a burn-in, then the forward run and the control, which start from the same
-settled state. Each stage is a job of its own, since one process running two holds the first's
-ecosystem through the second, and the three run one after another:
-
-    export AFRICA_CELLSIZE=50km AFRICA_SEED=1 AFRICA_SAVEDIR=$AFRICA_HPC_ROOT/runs/50km
-    burnin=$(sbatch --parsable examples/paper/hpc/run.bash examples/paper/burnin.yaml)
-    sbatch --dependency=afterok:$burnin,singleton examples/paper/hpc/run.bash examples/paper/forward.yaml
-    AFRICA_NEUTRAL=true sbatch --dependency=afterok:$burnin,singleton \
-        examples/paper/hpc/run.bash examples/paper/forward.yaml
