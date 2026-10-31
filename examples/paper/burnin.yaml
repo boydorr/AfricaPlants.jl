@@ -1,0 +1,37 @@
+# The burn-in of one replicate and its held years as a data pipeline run, registering what they
+# write; see `pipeline.jl`. From the root of the repository, with the `AFRICA_*` settings in the
+# environment:
+#
+#     fair pull --local examples/paper/burnin.yaml && fair run examples/paper/burnin.yaml
+run_metadata:
+  description: The burn-in of one replicate of AfricaPlants' case study, and the held years that settle it
+  default_input_namespace: AfricaPlants
+  default_output_namespace: AfricaPlants
+  # `JULIA_NUM_THREADS` where it is set, else every core: `fair` runs this with `sh`, which expands it.
+  script: |
+    julia --threads=${JULIA_NUM_THREADS:-auto} --project=examples/paper examples/paper/pipeline.jl burnin
+
+register:
+- namespace: AfricaPlants
+  full_name: AfricaPlants
+  website: https://github.com/boydorr/AfricaPlants.jl
+
+# A `*` matches part or all of one segment of a name, so each entry is one output of every grid and
+# seed, with its own file type.
+write:
+- data_product: CaseStudy/*/Burnin/Diversity_*
+  description: The individuals, species and diversity of the whole landscape in each year of a burn-in, run backwards through the climate
+  file_type: csv
+- data_product: CaseStudy/*/Burnin/Totals_*
+  description: Each species' and each cell's individuals in each year of a burn-in
+  file_type: jld2
+- data_product: CaseStudy/*/Hold/Diversity_*
+  description: The individuals, species and diversity of the whole landscape in each year the first year's climate is held
+  file_type: csv
+- data_product: CaseStudy/*/Hold/Totals_*
+  description: Each species' and each cell's individuals in each year the first year's climate is held
+  file_type: jld2
+- data_product: CaseStudy/*/Hold/State_*
+  description: The settled state, every species' individuals in every cell, that the forward run and the control start from
+  file_type: jld2
+  public: false

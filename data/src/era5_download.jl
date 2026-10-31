@@ -8,9 +8,10 @@
 #     julia --project data/src/era5_download.jl [--dry-run]
 #
 # Needs a `~/.cdsapirc` holding the CDS URL and key, which CDSAPI.jl reads. Writes under
-# `$AFRICA_DATADIR/era5/` (default `data/era5/`). A decade not yet complete is named by its years
-# (`era5_t2m_2020-2025.nc`), so asking again once another year is complete fetches that block
-# afresh; delete the old one.
+# `$AFRICA_DATADIR/era5/` (default `data/era5/`), each file named by its variable, its decade and
+# the box (`era5_t2m_1940s_40N25W36S56E.nc`). A decade not yet complete is named by its years
+# (`era5_t2m_2020-2025_40N25W36S56E.nc`), so asking again once another year is complete fetches
+# that block afresh; delete the old one.
 
 module ERA5Download
 

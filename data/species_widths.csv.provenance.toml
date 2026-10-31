@@ -1,0 +1,12 @@
+source = "records_africa.csv joined to ERA5 monthly means"
+writer = "data/src/species_widths.jl"
+records_with_precipitation = 7052015
+species_with_precipitation_width = 56695
+written = "2026-09-17T00:14:38.517"
+species_with_temperature_width = 56841
+temperature = "minimum monthly t2m over the window, K; records on the quarter-degree lattice left out"
+window_months = 12
+bytes = 3884241
+species = 62906
+records_with_temperature = 7052015
+precipitation = "mean monthly tp over the window, m/day; records on the lattice, near a botanic garden or naming one left out"

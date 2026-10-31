@@ -1,0 +1,10 @@
+source = "evi/evi_mean_2001_2025.nc and EarthEnv consensus land cover"
+bytes = 5530190
+landcover = "EarthEnv{LandCover}, classes needleleaf_trees, evergreen_broadleaf_trees, deciduous_broadleaf_trees, other_trees, shrubs, herbaceous, cultivated_and_managed, regularly_flooded, barren"
+cells_with_fraction = 2462400
+min_evi_months = 36
+cells_with_evi = 1238289
+written = "2026-09-15T13:06:59.552"
+landcover_doi = "10.1111/geb.12182"
+cells = 2462400
+writer = "data/src/seeding_grid.jl"

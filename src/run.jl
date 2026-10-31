@@ -234,26 +234,35 @@ Return the diversity of `eco` as a whole at each order in `qs`, as a named tuple
 `norm_alpha`, `raw_beta`, `norm_beta`, `raw_rho`, `norm_rho` and `gamma`, each a vector over `qs`.
 Every measure is Diversity.jl's own, over the landscape partitioned into its cells.
 
-Under MPI no rank holds the whole landscape, so it is gathered first: every rank allocates a
-`species x cells` array (3.8 GiB for the continent at 50 km), the root fills and measures it, and
-the answers go back to every rank. Every rank must call this, and a run that records often is
-better off in one process.
+Under MPI no rank holds the whole landscape, so the root gathers its `species x cells` abundances,
+measures them, and sends the answers back to every rank. Every rank must call this, and a run that
+records often is better off in one process.
 """
 function metacommunity_diversity(eco;
                                  qs::AbstractVector{<:Real} = DIVERSITY_ORDERS)
     return _measure(eco, qs)
 end
 
-# An ecosystem of its own is what Diversity.jl measures directly.
-_measure(eco, qs) = map(m -> m(eco, qs).diversity, METACOMMUNITY_MEASURES)
+# Every measure of one metacommunity, by Diversity.jl.
+_measure(meta, qs) = map(m -> m(meta, qs).diversity, METACOMMUNITY_MEASURES)
+
+# An ecosystem is measured as one snapshot, whose normalised abundances every measure shares: asked
+# of the ecosystem itself, each measure normalises a copy of its own, as large as the landscape.
+function _measure(eco::Ecosystem, qs)
+    snapshot = Metacommunity(getabundance(eco), gettypes(eco),
+                             getpartition(eco))
+    return _measure(snapshot, qs)
+end
 
 # A distributed one has to be gathered first, and `gatherabundance` fills the array on the root
 # alone, so only the root can measure it; the answers then go back to every rank, which keeps a
-# caller that reports or records them the same on all of them.
+# caller that reports or records them the same on all of them. The counts go to Diversity as they
+# are, which normalises them into one copy; converted to floats first, they are copied twice and
+# warned about every time as not summing to one.
 function _measure(eco::MPIEcosystem, qs)
     gathered = EcoSISTEM.gatherabundance(eco)
     measured = MPI.Comm_rank(MPI.COMM_WORLD) == 0 ?
-               _measure(Metacommunity(Float64.(gathered)), qs) :
+               _measure(Metacommunity(gathered), qs) :
                map(_ -> Float64[], METACOMMUNITY_MEASURES)
     return MPI.bcast(measured, 0, MPI.COMM_WORLD)
 end

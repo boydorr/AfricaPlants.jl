@@ -1,0 +1,9 @@
+records = 7310020
+source = "records.csv within Natural Earth Africa"
+bytes = 600618018
+species = 63756
+flagged_garden_named = 31200
+written = "2026-09-17T00:13:56.452"
+flagged_near_garden = 46075
+writer = "data/src/species_traits.jl"
+flagged_on_lattice = 30809

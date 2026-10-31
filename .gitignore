@@ -3,3 +3,10 @@
 *.vscode
 *.pptx
 Manifest.toml
+# The HPC jobs' logs, written where they are submitted from (examples/paper/hpc/)
+africa*-*.out
+africa*-*.err
+africa*-*.memory
+africa*-*.Manifest.toml
+# Where `fair init` keeps a clone's data pipeline configuration (examples/paper/hpc/setup.jl)
+/.fair

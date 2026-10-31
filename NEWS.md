@@ -1,5 +1,60 @@
 # NEWS
 
+- v0.3.0
+  - Changed
+    - The package is named `AfricaPlants`, not `Africa`: scripts say `using AfricaPlants`, and the
+      paper's environment depends on it under that name.
+    - The paper's run is in `examples/paper/`, its stage and figure scripts sharing one environment,
+      `examples/paper/Project.toml`, and `examples/paper.jl` (was `africa_threads.jl`) sets it off
+      locally; `examples/` keeps the rest (`examples/mpi.jl`). The scripts' names lose their
+      `africa_` prefix.
+    - Every replicate runs its own burn-in: `examples/paper/burnin.jl` writes
+      `burnin_seed<N>_00.jld2` and `start_seed<N>_00.jld2`, and `examples/paper/forward.jl` starts
+      from its own seed's settled state by default, so that no result rests on one realisation of
+      the burn-in. The species are the same in every replicate (`AFRICA_SPECIES_SEED`).
+    - `examples/paper/plots.jl` draws richness on a scale that stops at the 98th percentile of
+      cell richness, draws cells that never held an individual in any run as sea rather than as no
+      species, while a cell that lost every plant still shows as empty, and ignores the saved end
+      states (`*_end00.jld2`) beside the runs, which it used to open as runs and fail on.
+    - CSV 1 is required: the record-cleaning script keeps parse problems quiet with its
+      `on_error` keyword.
+    - EcoSISTEM 0.9 is required. Its `era5requests` puts the box in each ERA5 file's name
+      (`era5_t2m_1940s_40N25W36S56E.nc`), so files fetched under 0.8 are renamed, with the `file` in
+      each provenance record, or `data/src/era5_download.jl` fetches them again.
+    - The published climate envelopes are looked for in `data/plant_trait/`, the dataset as the EIDC
+      publishes it; `AFRICA_ENVELOPES` still names another copy.
+    - A run in one process measures its yearly diversity on one snapshot of the landscape, holding
+      one normalised copy of the abundances instead of one per measure; the values are unchanged.
+  - Added
+    - Blessing tests, in `test/canonical/`: `Pkg.test(test_args = ["canonical"])` runs one
+      replicate's small-scale chain on the real data and checks the digests of its inputs and what
+      it produced against `reference.toml`, and the unit suite checks its one-year run the same way;
+      `AFRICA_BLESS=true` re-blesses.
+    - `abundance.pdf` and `climate_effect.pdf` from `examples/paper/plots.jl`: the individuals
+      each cell holds at the end with and without the changing climate, and their difference in
+      individuals.
+    - `examples/paper/series.jl` draws `timeseries.pdf` from the yearly `diversity_*.csv`:
+      individuals, species, and the effective numbers of species and of distinct communities at
+      q = 1, the control against the climate run.
+    - `examples/paper/recorded.jl` draws `recorded.pdf`, the species a cell ends with against the
+      species ever recorded in it, caching the recorded counts in `recorded_richness.csv`.
+    - `examples/paper/hpc/`: Slurm jobs for running the paper's experiment on MARS, a set-up job
+      ending in the blessing test and a run job that logs its memory, with what to copy there.
+    - `examples/paper/pipeline.jl`, with `burnin.yaml` and `forward.yaml`, runs a stage as a data
+      pipeline run, registering its outputs as `CaseStudy/<grid>/<Stage>/<Output>_<seed>`; the MARS
+      jobs set up the pipeline and run stages that way.
+    - 25 km, about the climate data's own resolution, is among the cell sizes a run may use, so
+      `AFRICA_CELLSIZE=25km` is accepted.
+  - Fixed
+    - A data script's provenance sidecar names the script that ran: those of `species_widths.csv`
+      and `width_holdout.csv` named `species_traits.jl`, which both scripts include.
+    - A run across MPI ranks no longer warns at every yearly recording that the abundances it measures
+      are not normalised, and the root holds one copy of them fewer.
+    - `examples/paper/burnin.jl` makes `AFRICA_SAVEDIR` if it does not exist, rather than failing at its
+      first yearly record.
+    - The stage scripts drop the study area once the last ecosystem is built on it, since it keeps
+      every raw layer read, and the burn-in drops its own ecosystem before building the held
+      years', so the two no longer overlap. The values are unchanged.
 - v0.2.0
   - Changed
     - Rebuilt on EcoSISTEM 0.8 and Julia 1.11: the package now decides a projected Africa

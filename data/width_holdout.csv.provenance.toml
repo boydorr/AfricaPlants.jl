@@ -1,0 +1,8 @@
+source = "records_africa.csv joined to ERA5 monthly means, with the taxonomy of the published envelopes"
+bytes = 58424
+prior_from_records = 30
+written = "2026-09-20T20:57:33.650"
+prior_members = 5
+known_from_records = 100
+writer = "data/src/width_holdout.jl"
+scores = "natural log of estimate over known width: rmse, median absolute value, exp(median) as bias; zero counts estimates of zero, left out of the rest"
