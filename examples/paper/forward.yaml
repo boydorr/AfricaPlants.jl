@@ -1,0 +1,44 @@
+# The forward run of one replicate, or with `AFRICA_NEUTRAL=true` its control, as a data pipeline run,
+# starting from the settled state its burn-in registered and registering what it writes; see
+# `pipeline.jl`. From the root of the repository, with the `AFRICA_*` settings in the environment:
+#
+#     fair pull --local examples/paper/forward.yaml && fair run examples/paper/forward.yaml
+run_metadata:
+  description: The forward run of one replicate of AfricaPlants' case study through the climate from 1940, or its control under the climate of 1940 held
+  default_input_namespace: AfricaPlants
+  default_output_namespace: AfricaPlants
+  # `JULIA_NUM_THREADS` where it is set, else every core: `fair` runs this with `sh`, which expands it.
+  script: |
+    julia --threads=${JULIA_NUM_THREADS:-auto} --project=examples/paper examples/paper/pipeline.jl forward
+
+register:
+- namespace: AfricaPlants
+  full_name: AfricaPlants
+  website: https://github.com/boydorr/AfricaPlants.jl
+
+read:
+- data_product: CaseStudy/*/Hold/State_*
+
+# A `*` matches part or all of one segment of a name, so each entry is one output of every grid and
+# seed, with its own file type.
+write:
+- data_product: CaseStudy/*/Forward/Diversity_*
+  description: The individuals, species and diversity of the whole landscape in each year of a forward run
+  file_type: csv
+- data_product: CaseStudy/*/Forward/Cells_*
+  description: Each cell's normalised alpha diversity at each order, and each species' and each cell's individuals, in each year of a forward run, with its grid
+  file_type: jld2
+- data_product: CaseStudy/*/Forward/State_*
+  description: The state a forward run ends in, every species' individuals in every cell
+  file_type: jld2
+  public: false
+- data_product: CaseStudy/*/Neutral/Diversity_*
+  description: The individuals, species and diversity of the whole landscape in each year of a control, the climate of 1940 held
+  file_type: csv
+- data_product: CaseStudy/*/Neutral/Cells_*
+  description: Each cell's normalised alpha diversity at each order, and each species' and each cell's individuals, in each year of a control, with its grid
+  file_type: jld2
+- data_product: CaseStudy/*/Neutral/State_*
+  description: The state a control ends in, every species' individuals in every cell
+  file_type: jld2
+  public: false

@@ -2,6 +2,7 @@
 AfricaPlants = "6119f539-958e-4989-9c66-2e1931f65b8f"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DataPipeline = "9ced6f0a-eb77-43a8-bbd1-bbf3031b0d12"
 DimensionalData = "0703355e-b756-11e9-17c0-8b28908087d0"
 Diversity = "d3d5718d-52de-57ab-b67a-eca7fd6175a4"
 EcoSISTEM = "ed2dc23b-ada4-5fdb-a26f-56368a14ad8f"
@@ -18,6 +19,7 @@ AfricaPlants = {path = "../.."}
 [compat]
 CSV = "1"
 DataFrames = "1"
+DataPipeline = "0.59"
 DimensionalData = "0.30"
 Diversity = "0.6.3"
 EcoSISTEM = "0.9"
