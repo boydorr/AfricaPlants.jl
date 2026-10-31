@@ -88,6 +88,9 @@ area = africa_area(chosen.cellsize, regime = positioning.regime,
 timing = NEUTRAL ? HeldClimateYear(1940) : ForwardClimate()
 eco = africa_ecosystem(species, area, timing, seed = SEED,
                        distributed = DISTRIBUTED)
+# The study area holds every raw layer read, tens of gigabytes, and nothing more is built on it.
+area = nothing
+Base.GC.gc()
 continue_from!(eco, load_abundances(joinpath(SAVEDIR, START)),
                provenance = gbif_record("records_africa.csv"))
 

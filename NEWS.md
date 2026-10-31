@@ -52,6 +52,9 @@
       are not normalised, and the root holds one copy of them fewer.
     - `examples/paper/burnin.jl` makes `AFRICA_SAVEDIR` if it does not exist, rather than failing at its
       first yearly record.
+    - The stage scripts drop the study area once the last ecosystem is built on it, since it keeps
+      every raw layer read, and the burn-in drops its own ecosystem before building the held
+      years', so the two no longer overlap. The values are unchanged.
 - v0.2.0
   - Changed
     - Rebuilt on EcoSISTEM 0.8 and Julia 1.11: the package now decides a projected Africa

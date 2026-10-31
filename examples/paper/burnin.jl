@@ -159,12 +159,17 @@ end
 SaveAbundance(SAVEDIR, "burnin_seed$(SEED)_")(eco, (count = 1,))
 save_totals("burnin", backwards_totals)
 
-# The first year's climate repeated, from the state the backwards run reached.
+# The first year's climate repeated, from the state the backwards run reached and saved, on the same
+# study area, whose raw layer reads this build reuses. The backwards run's ecosystem is dropped
+# before the build, and the area, tens of gigabytes, after it.
+eco = nothing
+Base.GC.gc()
 held = africa_ecosystem(species, area, HeldClimateYear(1940), seed = SEED,
                         distributed = DISTRIBUTED)
-backwards = load_abundances(joinpath(SAVEDIR,
-                                     "burnin_seed$(SEED)_00.jld2"))
-continue_from!(held, backwards,
+area = nothing
+Base.GC.gc()
+continue_from!(held,
+               load_abundances(joinpath(SAVEDIR, "burnin_seed$(SEED)_00.jld2")),
                provenance = gbif_record("records_africa.csv"))
 held_totals = totals(held, HELD)
 started = time()
