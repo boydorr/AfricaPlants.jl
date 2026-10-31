@@ -11,7 +11,7 @@ another machine.
 | `transfer.txt` | what a run reads that the repository does not hold, for `rsync` to copy into the clone |
 | `setup.bash` | the one-off job: the environments instantiated and precompiled, `fetch.jl`, `setup.jl`, then the blessing test |
 | `fetch.jl` | EarthEnv's land cover and Natural Earth's outline, into EcoSISTEM's cache in the depot |
-| `setup.jl` | the data pipeline: `fair`, the local registry, and the clone initialised against them |
+| `setup.jl` | the data pipeline: `fair`, the local registry, and `fair init` run in the clone, which makes its `.fair/` |
 | `fair-user.yaml` | who the runs are registered as, copied to `$AFRICA_HPC_ROOT/fair/user.yaml` and filled in |
 | `run.bash` | one stage as a job, configured by the `AFRICA_*` variables it is submitted with: a pipeline run given its config (`examples/paper/burnin.yaml`, `forward.yaml`), a plain run given its script |
 
