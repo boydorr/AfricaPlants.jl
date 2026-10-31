@@ -50,9 +50,10 @@ set -euo pipefail
 stage="${1:?name the stage to run, such as examples/paper/burnin.yaml}"
 logs="${SLURM_JOB_NAME:-africa}-${SLURM_JOB_ID:-local}"
 
-# Brings the environment up to date with the clone, should it have moved since `setup.bash`, and
-# keeps the versions it resolved beside the logs: the manifest is not part of the repository.
-julia --project=examples/paper -e 'using Pkg; Pkg.instantiate()'
+# Brings the environment into line with the clone, should it have moved since `setup.bash`, keeping
+# the manifest's versions where it can, and keeps the versions it resolved beside the logs: the
+# manifest is not part of the repository.
+julia --project=examples/paper -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
 cp examples/paper/Manifest.toml "$logs.Manifest.toml"
 
 echo "$stage, $(date -u +%FT%TZ), on $(hostname)"

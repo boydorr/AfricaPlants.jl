@@ -47,8 +47,10 @@ done < examples/paper/hpc/transfer.txt
 # The depot may be one other jobs set up earlier, its copy of the registry as old as theirs: one that
 # does not know the manifests' versions makes the blessing test re-resolve to older ones.
 julia -e 'using Pkg; Pkg.Registry.update()'
-julia --project=. -e 'using Pkg; Pkg.instantiate()'
-julia --project=examples/paper -e 'using Pkg; Pkg.instantiate()'
+# A manifest an earlier set-up left is brought into line with the project as it now stands, keeping
+# its versions: `instantiate` alone refuses one that lacks a dependency the project has gained.
+julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
+julia --project=examples/paper -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
 julia --project=examples/paper examples/paper/hpc/fetch.jl
 julia --project=examples/paper examples/paper/hpc/setup.jl
 julia --project=. -e 'using Pkg; Pkg.test(test_args = ["canonical"])'
