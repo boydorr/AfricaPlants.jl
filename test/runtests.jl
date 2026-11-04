@@ -58,6 +58,7 @@ include(joinpath(DATASRC, "era5_download.jl"))
 include(joinpath(DATASRC, "twentycr_download.jl"))
 include(joinpath(DATASRC, "inventory.jl"))
 include(joinpath(DATASRC, "gbif_download.jl"))
+include(joinpath(DATASRC, "envelopes.jl"))
 include(joinpath(DATASRC, "gbif_clean.jl"))
 include(joinpath(DATASRC, "centroids.jl"))
 include(joinpath(DATASRC, "gardens.jl"))
@@ -77,6 +78,8 @@ using TOML
 using Statistics
 using SparseArrays: sparse
 using DimensionalData: DimensionalData
+using EcoSISTEM.Provenancer: SourceFacts, DepositCitedApart, GeneratedOnRequest,
+                             record_provenance, writesidecar
 
 # Write a small ERA5-shaped file: `variable` over a 3 x 4 lattice for `months` consecutive months
 # from January `year0`, valued `base + t` in month t at every cell, with the CDS's own axis names
@@ -247,6 +250,54 @@ end
         @test TOML.parsefile(Inventory.provenance_path(out))["writer"] ==
               "data/src/" * script
     end
+    # A GBIF download's record is EcoSISTEM's, written from the facts its DOI's metadata gives,
+    # here by hand, and a run reads it back from the sidecar alone.
+    key = "0014627-260903145123482"
+    doi = "10.15468/dl.n4a2sa"
+    @test GBIFDownload.gbif_citation(doi, Dates.Date(2026, 9, 12)) ==
+          "GBIF.org (12 September 2026) GBIF Occurrence Download https://doi.org/$doi"
+    metadata = SourceFacts(source = "Occurrence Download",
+                           title = "Occurrence Download", doi = doi,
+                           releasedate = "2026-09-12", licence = "cc-by-nc-4.0",
+                           authors = ["GBIF.org User"], identifies = :data)
+    csv = joinpath(dir, key * ".csv")
+    write(csv, "gbifID\n1\n")
+    writesidecar(csv,
+                 GBIFDownload.download_record(csv,
+                                              GBIFDownload.download_facts(metadata),
+                                              name = :era5, key = key,
+                                              url = "https://api.gbif.org/$key.zip",
+                                              fetched = false))
+    rm(csv)
+    gbif = gbif_record(csv)
+    @test gbif.role === :abundance && gbif.doi == doi &&
+          gbif.licence == "cc-by-nc-4.0" &&
+          gbif.source == "GBIF occurrence download"
+    @test gbif.citation ==
+          GBIFDownload.gbif_citation(doi, Dates.Date(2026, 9, 12))
+    @test gbif.route == GeneratedOnRequest(doi) && gbif.primary === true
+    @test gbif.title == "GBIF occurrence download $key (1940-present)"
+    @test gbif.deposit == DepositCitedApart(GBIFDownload.GBIF_ORG)
+    @test gbif.request["years"] == "1940-present" && isnothing(gbif.fetched)
+    @test_throws ErrorException gbif_record(joinpath(dir, "absent.csv"))
+    # The envelopes' record names the paper they were made for as the deposit cited apart; once
+    # written, from facts here by hand, `envelopes_record` reads it back from the dataset's DOI.
+    table = joinpath(dir, "global_plant_climate_envelopes.csv")
+    write(table, "SppID\n1\n")
+    paper = SourceFacts(source = "Strong phylogenetic signals in global plant bioclimatic envelopes",
+                        doi = AfricaPlants.ENVELOPES_PAPER_DOI,
+                        identifies = :paper, authors = ["Claire Harris"],
+                        releasedate = "2022-07-20",
+                        journal = "Global Ecology and Biogeography",
+                        volume = "31", issue = "11", pages = "2191-2203")
+    written = record_provenance(table,
+                                SourceFacts(source = "Bioclimatic envelopes for global plant species",
+                                            doi = AfricaPlants.ENVELOPES_DOI,
+                                            identifies = :data,
+                                            deposit = DepositCitedApart(paper)),
+                                role = :species)
+    @test envelopes_record(table) == written
+    @test envelopes_record(table).deposit == DepositCitedApart(paper)
 end
 
 @testset "Data scripts: inventory" begin

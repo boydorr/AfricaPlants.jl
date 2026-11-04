@@ -24,6 +24,10 @@
       and `gbif_record` return its `ProvenanceRecord`.
     - The published climate envelopes are looked for in `data/plant_trait/`, the dataset as the EIDC
       publishes it; `AFRICA_ENVELOPES` still names another copy.
+    - `gbif_record(path)` takes the GBIF download itself and returns the provenance record
+      `data/src/gbif_download.jl` writes beside it, with the download's checksum and GBIF's dated
+      citation; it took the seeding table's name. `envelopes_record` returns the envelopes' record,
+      which cites the paper they were made for as well.
     - A run in one process measures its yearly diversity on one snapshot of the landscape, holding
       one normalised copy of the abundances instead of one per measure; the values are unchanged.
   - Added
@@ -46,6 +50,8 @@
       jobs set up the pipeline and run stages that way.
     - 25 km, about the climate data's own resolution, is among the cell sizes a run may use, so
       `AFRICA_CELLSIZE=25km` is accepted.
+    - `data/src/envelopes.jl` records where the climate envelopes came from, using their DOI and
+      their paper's, in a sidecar tracked beside the table in `data/plant_trait/data/`.
   - Fixed
     - A data script's provenance sidecar names the script that ran: those of `species_widths.csv`
       and `width_holdout.csv` named `species_traits.jl`, which both scripts include.

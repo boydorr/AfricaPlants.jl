@@ -45,6 +45,11 @@ const DATA = joinpath(pkgdir(AfricaPlants), "data")
 const ENVELOPES = get(ENV, "AFRICA_ENVELOPES",
                       joinpath(DATA, "plant_trait", "data",
                                "global_plant_climate_envelopes.csv"))
+# The GBIF download the seeding records are cleaned from, named by its request key; a run's
+# provenance carries its record.
+const GBIF = let dir = joinpath(DATA, "gbif", "era5")
+    joinpath(dir, strip(read(joinpath(dir, "request.key"), String)) * ".csv")
+end
 const SEED = parse(Int, get(ENV, "AFRICA_SEED", "1"))
 # The species are the same in every replicate, so that every replicate can start from one settled
 # state: their own draws take this seed and the run's random streams take `SEED`.
@@ -92,7 +97,7 @@ eco = africa_ecosystem(species, area, timing, seed = SEED,
 area = nothing
 Base.GC.gc()
 continue_from!(eco, load_abundances(joinpath(SAVEDIR, START)),
-               provenance = gbif_record("records_africa.csv"))
+               provenance = gbif_record(GBIF))
 
 # The recorder is called from a callback of our own rather than passed to `simulate!`, so that the
 # whole landscape can be recorded and reported in the same place: EcoSISTEM records the year, we add

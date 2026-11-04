@@ -171,22 +171,14 @@ end
 """
     envelopes_record(path)
 
-Return the [`ProvenanceRecord`](@ref) of the published climate envelopes read from `path`, for a
-run's provenance.
+Return the [`ProvenanceRecord`](@ref) of the published climate envelopes at `path`, for a run's
+provenance: the record `data/src/envelopes.jl` writes beside them, naming the dataset by its DOI
+and the paper it was made for as its deposit, cited apart. Where there is none, one is written from
+the dataset's DOI alone, which needs the network and names no paper.
 """
 function envelopes_record(path::AbstractString)
-    return EcoSISTEM.ProvenanceRecord(role = :species,
-                                      source = "Bioclimatic envelopes for global plant species",
-                                      path = basename(path),
-                                      doi = ENVELOPES_DOI,
-                                      licence = "Open Government Licence v3",
-                                      citation = "Harris, C., Brummitt, N., Cobbold, C. A. and Reeve, R. (2022). " *
-                                                 "Bioclimatic envelopes for global plant species. NERC EDS " *
-                                                 "Environmental Information Data Centre. " *
-                                                 "https://doi.org/$ENVELOPES_DOI. Described in Harris et al. " *
-                                                 "(2022), Strong phylogenetic signals in global plant " *
-                                                 "bioclimatic envelopes, Global Ecology and Biogeography 31, " *
-                                                 "2191-2203, https://doi.org/$ENVELOPES_PAPER_DOI")
+    return EcoSISTEM.Provenancer.record_provenance(path, ENVELOPES_DOI,
+                                                   role = :species)
 end
 
 """

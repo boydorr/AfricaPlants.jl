@@ -43,6 +43,11 @@ const DATA = joinpath(pkgdir(AfricaPlants), "data")
 const ENVELOPES = get(ENV, "AFRICA_ENVELOPES",
                       joinpath(DATA, "plant_trait", "data",
                                "global_plant_climate_envelopes.csv"))
+# The GBIF download the seeding records are cleaned from, named by its request key; a run's
+# provenance carries its record.
+const GBIF = let dir = joinpath(DATA, "gbif", "era5")
+    joinpath(dir, strip(read(joinpath(dir, "request.key"), String)) * ".csv")
+end
 const SEED = parse(Int, get(ENV, "AFRICA_SEED", "1"))
 # The species are the same in every replicate, so that every replicate can start from one settled
 # state: their own draws take this seed and the run's random streams take `SEED`.
@@ -122,7 +127,7 @@ say("seeding: c = ", seeding.c, ", continental scale ", seeding.scale, "; ",
 # each decade it passes; the callback only prints, which is safe on every MPI rank.
 seeding_rows = Intervention(EveryStep(), ActiveCells(),
                             AddAbundanceTable(seeding.table),
-                            provenance = gbif_record("records_africa.csv"))
+                            provenance = gbif_record(GBIF))
 # Each species' and each cell's individuals in every recorded year of a stage, kept beside its
 # diversity: which species a stage lost and when, and where the individuals are.
 function totals(eco, years::Integer)
@@ -170,7 +175,7 @@ area = nothing
 Base.GC.gc()
 continue_from!(held,
                load_abundances(joinpath(SAVEDIR, "burnin_seed$(SEED)_00.jld2")),
-               provenance = gbif_record("records_africa.csv"))
+               provenance = gbif_record(GBIF))
 held_totals = totals(held, HELD)
 started = time()
 @time simulate!(held, HELD * 1.0year, 1.0month_mean_duration,

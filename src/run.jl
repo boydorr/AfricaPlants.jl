@@ -49,17 +49,16 @@ end
 """
     gbif_record(path)
 
-Return the [`ProvenanceRecord`](@ref) of the GBIF occurrence download the seeding records come
-from, read from `path`, for a run's provenance.
+Return the [`ProvenanceRecord`](@ref) of the GBIF occurrence download at `path`, which the seeding
+records are cleaned from, for a run's provenance: the record `data/src/gbif_download.jl` writes
+beside it. Only that record is read, so the download itself need not be present.
 """
 function gbif_record(path::AbstractString)
-    return EcoSISTEM.ProvenanceRecord(role = :abundance,
-                                      source = "GBIF occurrence download",
-                                      path = basename(path),
-                                      doi = "10.15468/dl.n4a2sa",
-                                      licence = "CC BY-NC 4.0",
-                                      citation = "GBIF.org (2026) GBIF Occurrence Download " *
-                                                 "https://doi.org/10.15468/dl.n4a2sa")
+    record = EcoSISTEM.provenance(path)
+    isnothing(record) &&
+        error("`$path` has no provenance record beside it that EcoSISTEM can read: " *
+              "`data/src/gbif_download.jl` writes it")
+    return record
 end
 
 # Each species' demand per individual on the resource named `name`, as a vector.
