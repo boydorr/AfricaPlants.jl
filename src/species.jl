@@ -171,26 +171,27 @@ end
 """
     envelopes_record(path)
 
-Return the [`InputRecord`](@ref) of the published climate envelopes read from `path`, for a run's
-provenance.
+Return the [`ProvenanceRecord`](@ref) of the published climate envelopes read from `path`, for a
+run's provenance.
 """
 function envelopes_record(path::AbstractString)
-    return EcoSISTEM.InputRecord(role = :species,
-                                 dataset = "Bioclimatic envelopes for global plant species",
-                                 path = basename(path), doi = ENVELOPES_DOI,
-                                 licence = "Open Government Licence v3",
-                                 citation = "Harris, C., Brummitt, N., Cobbold, C. A. and Reeve, R. (2022). " *
-                                            "Bioclimatic envelopes for global plant species. NERC EDS " *
-                                            "Environmental Information Data Centre. " *
-                                            "https://doi.org/$ENVELOPES_DOI. Described in Harris et al. " *
-                                            "(2022), Strong phylogenetic signals in global plant " *
-                                            "bioclimatic envelopes, Global Ecology and Biogeography 31, " *
-                                            "2191-2203, https://doi.org/$ENVELOPES_PAPER_DOI")
+    return EcoSISTEM.ProvenanceRecord(role = :species,
+                                      source = "Bioclimatic envelopes for global plant species",
+                                      path = basename(path),
+                                      doi = ENVELOPES_DOI,
+                                      licence = "Open Government Licence v3",
+                                      citation = "Harris, C., Brummitt, N., Cobbold, C. A. and Reeve, R. (2022). " *
+                                                 "Bioclimatic envelopes for global plant species. NERC EDS " *
+                                                 "Environmental Information Data Centre. " *
+                                                 "https://doi.org/$ENVELOPES_DOI. Described in Harris et al. " *
+                                                 "(2022), Strong phylogenetic signals in global plant " *
+                                                 "bioclimatic envelopes, Global Ecology and Biogeography 31, " *
+                                                 "2191-2203, https://doi.org/$ENVELOPES_PAPER_DOI")
 end
 
 """
     africa_species(pool; density = 1.0 / m^2, water = nothing, survival = 0.2, seed = 1,
-                   provenance = EcoSISTEM.InputRecord[])
+                   provenance = EcoSISTEM.ProvenanceRecord[])
 
 Build the [`SpeciesList`](@ref) of the species in `pool`, the `pool` of [`species_pool`](@ref),
 named by their binomials and with no individuals.
@@ -217,7 +218,7 @@ distance is drawn uniformly from 0.6 to 2.4 km.
 function africa_species(pool::DataFrame; density::Unitful.Quantity = 1.0 / m^2,
                         water::Union{Nothing, Unitful.Quantity} = nothing,
                         survival::Real = 0.2, seed::Integer = 1,
-                        provenance = EcoSISTEM.InputRecord[])
+                        provenance = EcoSISTEM.ProvenanceRecord[])
     n = nrow(pool)
     area = uconvert(m^2, 1 / density)
     dispersal = rand(Random.Xoshiro(seed), Uniform(0.6, 2.4), n) .* km

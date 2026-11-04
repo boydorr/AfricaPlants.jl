@@ -49,17 +49,17 @@ end
 """
     gbif_record(path)
 
-Return the [`InputRecord`](@ref) of the GBIF occurrence download the seeding records come from,
-read from `path`, for a run's provenance.
+Return the [`ProvenanceRecord`](@ref) of the GBIF occurrence download the seeding records come
+from, read from `path`, for a run's provenance.
 """
 function gbif_record(path::AbstractString)
-    return EcoSISTEM.InputRecord(role = :abundance,
-                                 dataset = "GBIF occurrence download",
-                                 path = basename(path),
-                                 doi = "10.15468/dl.n4a2sa",
-                                 licence = "CC BY-NC 4.0",
-                                 citation = "GBIF.org (2026) GBIF Occurrence Download " *
-                                            "https://doi.org/10.15468/dl.n4a2sa")
+    return EcoSISTEM.ProvenanceRecord(role = :abundance,
+                                      source = "GBIF occurrence download",
+                                      path = basename(path),
+                                      doi = "10.15468/dl.n4a2sa",
+                                      licence = "CC BY-NC 4.0",
+                                      citation = "GBIF.org (2026) GBIF Occurrence Download " *
+                                                 "https://doi.org/10.15468/dl.n4a2sa")
 end
 
 # Each species' demand per individual on the resource named `name`, as a vector.
@@ -144,14 +144,14 @@ function burnin_table(eco, records::DataFrame, grid::NamedTuple;
 end
 
 """
-    run_burnin!(eco, table, months; provenance = EcoSISTEM.InputRecord[])
+    run_burnin!(eco, table, months; provenance = EcoSISTEM.ProvenanceRecord[])
 
 Run `eco`, built with [`ReversedClimate`](@ref), back through `months` months of climate in steps of
 one `month_mean_duration`, adding the rows of `table` from [`burnin_table`](@ref) as their times
 pass. `provenance` records the data the table was made from.
 """
 function run_burnin!(eco, table, months::Integer;
-                     provenance = EcoSISTEM.InputRecord[])
+                     provenance = EcoSISTEM.ProvenanceRecord[])
     seeding = Intervention(EveryStep(), ActiveCells(),
                            AddAbundanceTable(table), provenance = provenance)
     simulate!(eco, months * 1.0month_mean_duration, 1.0month_mean_duration,
@@ -327,14 +327,14 @@ function abundance_table(eco, abundances::AbstractMatrix{<:Integer})
 end
 
 """
-    continue_from!(eco, abundances; provenance = EcoSISTEM.InputRecord[])
+    continue_from!(eco, abundances; provenance = EcoSISTEM.ProvenanceRecord[])
 
 Set `eco`, freshly built, to hold `abundances`, a `species x cells` matrix saved from an ecosystem
 on the same grid and species, by adding them all at elapsed zero. `provenance` records where the
 abundances came from.
 """
 function continue_from!(eco, abundances::AbstractMatrix{<:Integer};
-                        provenance = EcoSISTEM.InputRecord[])
+                        provenance = EcoSISTEM.ProvenanceRecord[])
     EcoSISTEM.applyinterventions!(eco,
                                   Intervention(EveryStep(), ActiveCells(),
                                                AddAbundanceTable(abundance_table(eco,

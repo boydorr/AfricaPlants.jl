@@ -152,7 +152,7 @@ end
     @test EcoSISTEM.assetpath(assets[1]) == assets[1].path
     record = provenance(assets[1].path)
     @test record.url == assets[1].url
-    @test record.dataset == "TwentyCR" && record.code == "air"
+    @test record.source == "TwentyCR" && record.code == "air"
     @test isnothing(record.fetched)
 end
 

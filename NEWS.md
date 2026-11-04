@@ -18,9 +18,10 @@
       states (`*_end00.jld2`) beside the runs, which it used to open as runs and fail on.
     - CSV 1 is required: the record-cleaning script keeps parse problems quiet with its
       `on_error` keyword.
-    - EcoSISTEM 0.9 is required. Its `era5requests` puts the box in each ERA5 file's name
+    - EcoSISTEM 0.10.1 is required. Its `era5requests` puts the box in each ERA5 file's name
       (`era5_t2m_1940s_40N25W36S56E.nc`), so files fetched under 0.8 are renamed, with the `file` in
-      each provenance record, or `data/src/era5_download.jl` fetches them again.
+      each provenance record, or `data/src/era5_download.jl` fetches them again. `envelopes_record`
+      and `gbif_record` return its `ProvenanceRecord`.
     - The published climate envelopes are looked for in `data/plant_trait/`, the dataset as the EIDC
       publishes it; `AFRICA_ENVELOPES` still names another copy.
     - A run in one process measures its yearly diversity on one snapshot of the landscape, holding
