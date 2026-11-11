@@ -3,7 +3,7 @@
 # The backwards burn-in: every Africa species with an envelope and widths, filled from the occurrence
 # records to what each cell's resources hold at the last month of the climate, run back through the
 # ERA5 months to the first while each record is added at the month it was made, then settled for
-# some years under the first year's climate repeated. Writes the settled state for `forward.jl`.
+# some years under the 1941-1950 average year repeated. Writes the settled state for `forward.jl`.
 #
 # Every replicate runs its own burn-in, so that nothing in the results rests on one realisation of
 # it: with `AFRICA_SEED=2` this writes `burnin_seed2_00.jld2` and `start_seed2_00.jld2` beside seed
@@ -23,7 +23,7 @@
 # | `AFRICA_DISTRIBUTED` | `auto`             | `serial` or `mpi` to demand one                  |
 # | `AFRICA_SEED`     | `1`                   | the replicate: seeds this burn-in's random streams and names what it writes |
 # | `AFRICA_SPECIES_SEED` | `1`               | seeds the species' own draws, the same in every replicate so that they simulate one pool |
-# | `AFRICA_HELD`     | `10`                  | years the first year's climate is repeated       |
+# | `AFRICA_HELD`     | `10`                  | years the 1941-1950 average year is repeated     |
 # | `AFRICA_SAVEDIR`  | `./Africa_run`        | where the settled state is written, made if need be |
 # | `AFRICA_ENVELOPES`| the CEH envelope file | `global_plant_climate_envelopes.csv`, in `data/plant_trait/data/` |
 
@@ -62,9 +62,11 @@ const DISTRIBUTED = let want = get(ENV, "AFRICA_DISTRIBUTED", "auto")
 end
 const SAVEDIR = mkpath(get(ENV, "AFRICA_SAVEDIR",
                            joinpath(pwd(), "Africa_run")))
-# The backwards run starts at the last month of the climate and runs back to January 1940.
+# The backwards run starts at the last month of the climate and runs back to January of the first
+# year whose every month has twelve months of climate behind it.
 const START = era5_last_month()
-const MONTHS = smallscale() ? 6 : 12 * (START.year - 1940) + START.month
+const MONTHS = smallscale() ? 6 :
+               12 * (START.year - FIRST_FULL_YEAR) + START.month
 const HELD = smallscale() ? 1 : parse(Int, get(ENV, "AFRICA_HELD", "10"))
 
 # Where each stage's yearly record of the whole landscape goes: individuals, species and every
@@ -72,6 +74,20 @@ const HELD = smallscale() ? 1 : parse(Int, get(ENV, "AFRICA_HELD", "10"))
 record(stage) = joinpath(SAVEDIR, "diversity_$(stage)_seed$(SEED).csv")
 
 say(xs...) = ISROOT && (println(xs...); flush(stdout))
+
+# Write how many species are placed in each cell of the grid over the whole burn-in, from the rows
+# its records place, as `recorded.jl` reads them: a row for each cell in the grid's order.
+function write_recorded(rows, habitat)
+    shape = size(parent(habitat.active))
+    linear = LinearIndices(shape)
+    seen = [Set{String}() for _ in 1:prod(shape)]
+    for (cell, species) in zip(rows.cell, rows.species)
+        push!(seen[cell isa CartesianIndex ? linear[cell] : cell], species)
+    end
+    CSV.write(joinpath(SAVEDIR, "recorded_richness.csv"),
+              DataFrame(cell = eachindex(seen), recorded = length.(seen)))
+    return nothing
+end
 
 # One progress line from a record: where the run has got to, what it holds, and its gamma diversity.
 function report(where, recorded, elapsed)
@@ -84,8 +100,7 @@ function report(where, recorded, elapsed)
                " at q = ", join(DIVERSITY_ORDERS, ", "))
 end
 
-# The species, under WFO's accepted names, and their records, each carrying the WFO species its name
-# means. A small run keeps the most-recorded species.
+# The species, under WFO's accepted names. A small run keeps the most-recorded species.
 envelopes = CSV.read(ENVELOPES, DataFrame,
                      select = [:species, :numrecords, :tmin, :tp, :ssr])
 widths = CSV.read(joinpath(DATA, "species_widths.csv"), DataFrame)
@@ -93,15 +108,20 @@ built = species_pool(envelopes, widths,
                      provenance = envelopes_record(ENVELOPES),
                      verbosity = ISROOT ? :normal : :silent)
 pool = scaled_pool(built.pool)
+# Every plant record, named by the WFO species its name means, with how long before the start it was
+# made. Every record counts as collecting effort; those of a simulated species are placed.
 records = CSV.read(joinpath(DATA, "records_africa.csv"), DataFrame,
                    select = [:wfo_species, :decimalLatitude, :decimalLongitude,
                        :year, :month])
 rename!(records, :wfo_species => :species)
+records.elapsed = months_back(records.year, records.month, start = START) .*
+                  1.0month_mean_duration
 simulated = Set(pool.species.name)
-filter!(r -> !ismissing(r.species) && r.species in simulated, records)
 say(length(pool), " species (", length(built.unmatched),
     " recorded species with no envelope left out, ", length(built.nowidth),
-    " on their relatives' width alone), ", nrow(records), " records")
+    " on their relatives' width alone); ",
+    count(s -> !ismissing(s) && s in simulated, records.species), " of ",
+    nrow(records), " records are theirs")
 
 species = africa_species(pool, seed = SPECIES_SEED,
                          verbosity = ISROOT ? :normal : :silent)
@@ -115,83 +135,108 @@ area = africa_area(chosen.cellsize, regime = positioning.regime,
                    verbosity = ISROOT ? :normal : :silent)
 say("grid ", chosen.cellsize)
 
-# Backwards through the climate, seeding as the records' months pass.
+# A record weighs its 0.05 degree cell's EVI times land area, shared among every record made in that
+# cell, and nothing where the EVI is not reliable. A record in a cell that is not simulated moves to
+# the nearest one within three cells.
+effort = WeightPerCell(seeding_layer(joinpath(DATA, "evi",
+                                              "evi_reliable_2001_2025.tif")),
+                       novalue = 0.0km^2)
+snap = 3 * chosen.cellsize
+
+# Backwards through the climate. Half the individuals fill each cell to what its resources hold at
+# the start, the species sharing it by their records' weights.
+weighted = FromOccurrences(records, weight = effort, snap = snap,
+                           level = EcoSISTEM.ProblemNotice())
 eco = africa_ecosystem(species, area, ReversedClimate(), seed = SEED,
-                       distributed = DISTRIBUTED)
-seeding = burnin_table(eco, records,
-                       read_seeding_grid(joinpath(DATA, "seeding_grid.nc")),
-                       start = START)
-say("seeding: c = ", seeding.c, ", continental scale ", seeding.scale, "; ",
-    seeding.used, " records used, ", seeding.inactive, " in no active cell; ",
-    seeding.started, " individuals to start, ", seeding.added,
-    " added over the burn-in; ", seeding.later, " records after ",
-    START.year, "-", lpad(START.month, 2, '0'), " in the start alone")
-# Seeded as `run_burnin!` does, but through `simulate!` directly so that a run of many hours reports
-# each decade it passes; the callback only prints, which is safe on every MPI rank.
-seeding_rows = Intervention(EveryStep(), ActiveCells(),
-                            AddAbundanceTable(seeding.table),
-                            provenance = gbif_record(GBIF))
-# Each species' and each cell's individuals in every recorded year of a stage, kept beside its
-# diversity: which species a stage lost and when, and where the individuals are.
-function totals(eco, years::Integer)
-    return (species = zeros(Int, length(pool), years + 1),
-            cells = zeros(Int, length(parent(eco.habitat.active)), years + 1))
+                       distributed = DISTRIBUTED,
+                       placement = ToCapacity(weighted))
+atstart = RecordTotals(eco, 1)
+atstart(eco, (count = 1,))
+startcount = sum(atstart.species)
+# The other half arrive as the run passes each record's month: each record at least one individual,
+# the rest in proportion to its weight. A record made after the start shapes the start alone. The
+# species placed in each cell are written for `recorded.jl`, as `recorded_richness.csv`.
+additions = FromOccurrences(records, time = :elapsed, weight = effort,
+                            snap = snap,
+                            level = EcoSISTEM.ProblemNotice()
+                            ) do rows, habitat, context
+    ISROOT && write_recorded(rows, habitat)
+    within = rows[rows.time .>= zero(eltype(rows.time)), :]
+    scaled = scale_to_total(ustrip.(km^2, within.weight), startcount)
+    say("seeding: ", startcount, " individuals to start; ", nrow(within),
+        " records add ", round(Int, sum(scaled.counts)), " over the burn-in; ",
+        nrow(rows) - nrow(within), " made after ", START.year, "-",
+        lpad(START.month, 2, '0'), " shape the start alone")
+    return (species = within.species, cell = within.cell, time = within.time,
+            count = round.(Int, scaled.counts))
 end
-function keep!(kept, eco, column::Integer)
-    now = abundance_totals(eco)
-    kept.species[:, column] = now.species
-    kept.cells[:, column] = now.cells
-    return kept
+seeding = Intervention(EveryStep(), ActiveCells(), AddAbundance(additions),
+                       provenance = gbif_record(GBIF))
+# A stage's recorders for the start and `years` recorded years: each species' and each cell's
+# individuals, which say which species a stage lost and when, and where the individuals are, and the
+# landscape's metacommunity measures.
+function recorders(eco, years::Integer)
+    return (totals = RecordTotals(eco, years + 1),
+            diversity = RecordDiversity(eco, years + 1, qs = DIVERSITY_ORDERS,
+                                        metacommunity = collect(METACOMMUNITY_MEASURES)))
+end
+# Record an occurrence of `stage` and append its year to the stage's table.
+function keep!(kept, eco, stage::AbstractString, years::Integer, occurrence)
+    kept.totals(eco, occurrence)
+    kept.diversity(eco, occurrence)
+    return record_diversity(record(stage), stage, years, kept.totals,
+                            kept.diversity, occurrence.count)
 end
 function save_totals(stage::AbstractString, kept)
     ISROOT &&
         jldsave(joinpath(SAVEDIR, "totals_$(stage)_seed$(SEED).jld2"),
-                species = pool.species.name, species_totals = kept.species,
-                cell_totals = kept.cells,
-                years = collect(0:(size(kept.species, 2) - 1)))
+                species = pool.species.name,
+                species_totals = kept.totals.species,
+                cell_totals = kept.totals.cells,
+                years = collect(0:(size(kept.totals.species, 2) - 1)))
     return nothing
 end
 
-backwards_totals = totals(eco, MONTHS ÷ 12)
+backwards = recorders(eco, MONTHS ÷ 12)
 started = time()
 @time simulate!(eco, MONTHS * 1.0month_mean_duration, 1.0month_mean_duration,
                 every = EveryInterval(12 * 1.0month_mean_duration),
-                intervention = seeding_rows) do occurrence
+                intervention = seeding) do occurrence
     back = occurrence.count - 1
-    keep!(backwards_totals, eco, occurrence.count)
-    now = record_diversity(record("burnin"), eco, "burnin", back)
+    now = keep!(backwards, eco, "burnin", back, occurrence)
     back % 10 == 0 &&
         report("burn-in: $(back) years back", now, time() - started)
     return nothing
 end
 SaveAbundance(SAVEDIR, "burnin_seed$(SEED)_")(eco, (count = 1,))
-save_totals("burnin", backwards_totals)
+save_totals("burnin", backwards)
 
-# The first year's climate repeated, from the state the backwards run reached and saved, its clock
-# back at the start and every species going on with its own random stream, on the same study area,
-# whose raw layer reads this build reuses. Every climate layer changes its rule here. The backwards
-# run's ecosystem is dropped before the build, and the area, tens of gigabytes, after it.
+# The average year of the first decade repeated, from the state the backwards run reached and saved.
+# Its clock goes back to the start, and every species goes on with its own random stream. It is built
+# on the same study area, whose raw layer reads this build reuses. Every climate layer changes its
+# rule here. The backwards run's ecosystem is dropped before the build, and the area, tens of
+# gigabytes, after it.
 eco = nothing
 Base.GC.gc()
-held = africa_ecosystem(species, area, HeldClimateYear(1940), seed = SEED,
+held = africa_ecosystem(species, area, HeldClimatology(HELD_DECADE),
+                        seed = SEED,
                         distributed = DISTRIBUTED,
                         from = joinpath(SAVEDIR, "burnin_seed$(SEED)_00.jld2"),
                         elapsed = 0.0s, changing = CLIMATE_LAYERS,
                         provenance = gbif_record(GBIF))
 area = nothing
 Base.GC.gc()
-held_totals = totals(held, HELD)
+settling = recorders(held, HELD)
 started = time()
 @time simulate!(held, HELD * 1.0year, 1.0month_mean_duration,
                 every = EveryInterval(12 * 1.0month_mean_duration)
                 ) do occurrence
     year = occurrence.count - 1
-    keep!(held_totals, held, occurrence.count)
-    now = record_diversity(record("hold"), held, "hold", year)
+    now = keep!(settling, held, "hold", year, occurrence)
     report("held climate: year $(year) of $(HELD)", now, time() - started)
     return nothing
 end
 SaveAbundance(SAVEDIR, "start_seed$(SEED)_")(held, (count = 1,))
-save_totals("hold", held_totals)
+save_totals("hold", settling)
 say("settled state written to ",
     joinpath(SAVEDIR, "start_seed$(SEED)_00.jld2"))

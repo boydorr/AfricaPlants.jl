@@ -11,16 +11,10 @@
 # | variable         | default        | meaning                                         |
 # |------------------|----------------|-------------------------------------------------|
 # | `AFRICA_SAVEDIR` | `./Africa_run` | where the runs are read and the figure written  |
-# | `AFRICA_CELLSIZE`| as the runs used | the grid to place the records on              |
 #
-# Placing the records needs the run's own grid, which takes some minutes to build, so the counts are
-# kept in `recorded_richness.csv` beside the runs and reused. Writes `recorded.pdf`.
+# The species recorded in each cell are those the burn-in placed there from the records, which
+# `burnin.jl` writes beside the runs as `recorded_richness.csv`. Writes `recorded.pdf`.
 
-using AfricaPlants
-using EcoSISTEM
-using EcoSISTEM.Units
-using Unitful
-using Unitful.DefaultSymbols
 using CSV
 using DataFrames
 using JLD2
@@ -29,48 +23,7 @@ using Printf
 using Statistics
 
 const SAVEDIR = get(ENV, "AFRICA_SAVEDIR", joinpath(pwd(), "Africa_run"))
-const DATA = joinpath(pkgdir(AfricaPlants), "data")
-const ENVELOPES = get(ENV, "AFRICA_ENVELOPES",
-                      joinpath(DATA, "plant_trait", "data",
-                               "global_plant_climate_envelopes.csv"))
-const CACHE = joinpath(SAVEDIR, "recorded_richness.csv")
-
-"""
-    recorded_richness(cells)
-
-Return how many of the simulated species were ever recorded in each of `cells` cells, by placing
-every seeding record on the run's grid as the burn-in does, snapping a record in an unsimulated cell
-to the nearest simulated one within three cells.
-"""
-function recorded_richness(cells::Integer)
-    envelopes = CSV.read(ENVELOPES, DataFrame,
-                         select = [:species, :numrecords, :tmin, :tp, :ssr])
-    widths = CSV.read(joinpath(DATA, "species_widths.csv"), DataFrame)
-    pool = species_pool(envelopes, widths).pool
-    records = CSV.read(joinpath(DATA, "records_africa.csv"), DataFrame,
-                       select = [:wfo_species, :decimalLatitude,
-                           :decimalLongitude])
-    rename!(records, :wfo_species => :species)
-    simulated = Set(pool.species.name)
-    filter!(r -> !ismissing(r.species) && r.species in simulated, records)
-    positioning = positioning_layers()
-    chosen = choose_cellsize(length(pool), regime = positioning.regime,
-                             supply = positioning.supply)
-    area = africa_area(chosen.cellsize, regime = positioning.regime,
-                       supply = positioning.supply)
-    layers = africa_layers(ForwardClimate())
-    habitat = GridHabitat(regime = layers.regime, supply = layers.supply,
-                          area = area)
-    length(parent(habitat.active)) == cells ||
-        error("the grid has $(length(parent(habitat.active))) cells and the runs have $(cells)")
-    placed = grid_cells(habitat, records.decimalLatitude,
-                        records.decimalLongitude, snap = 3)
-    seen = [Set{String}() for _ in 1:cells]
-    for (cell, species) in zip(placed, records.species)
-        cell > 0 && push!(seen[cell], species)
-    end
-    return length.(seen)
-end
+const RECORDED = joinpath(SAVEDIR, "recorded_richness.csv")
 
 runs = sort(filter(f -> startswith(f, "forward_seed") && endswith(f, ".jld2") &&
                         !contains(f, "_end"), readdir(SAVEDIR)))
@@ -79,15 +32,11 @@ run = load(joinpath(SAVEDIR, first(runs)))
 active, years = run["active"], run["years"]
 q0 = findfirst(==(0.0), run["qs"])
 
-counts = if isfile(CACHE)
-    CSV.read(CACHE, DataFrame).recorded
-else
-    println("placing the records on the run's grid; this takes a few minutes")
-    flush(stdout)
-    found = recorded_richness(length(active))
-    CSV.write(CACHE, DataFrame(cell = eachindex(found), recorded = found))
-    found
-end
+isfile(RECORDED) ||
+    error("no $(RECORDED): run `burnin.jl` into $(SAVEDIR) first")
+counts = CSV.read(RECORDED, DataFrame).recorded
+length(counts) == length(active) ||
+    error("$(RECORDED) has $(length(counts)) cells and the runs have $(length(active))")
 
 # A cell is compared only where both numbers mean something: it is simulated, it holds individuals,
 # and something was recorded there. The cells with no records are the point of the second panel.

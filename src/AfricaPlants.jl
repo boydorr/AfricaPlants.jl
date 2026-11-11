@@ -18,9 +18,7 @@ using CSV
 using DataFrames
 using Distributions: Uniform
 using Dates: Dates
-using SparseArrays: SparseArrays
-using Diversity: Diversity, Metacommunity, getabundance, getpartition,
-                 gettypes
+using Diversity: Diversity
 using Statistics: mean, median
 using DimensionalData: DimensionalData
 using NCDatasets: NCDatasets
@@ -36,8 +34,6 @@ include("axes.jl")
 include("landscape.jl")
 include("species.jl")
 include("seeding.jl")
-include("placement.jl")
-include("burnin.jl")
 include("run.jl")
 
 export smallscale, mediumscale, SCALED_SPECIES, requested_cellsize,
@@ -47,20 +43,16 @@ export smallscale, mediumscale, SCALED_SPECIES, requested_cellsize,
        AVAILABLE_CLASSES, CLIMATE_LAYERS, era5_dir, era5_last_month,
        available_ground,
        africa_layers,
-       AbstractClimateTiming, ForwardClimate, ReversedClimate, HeldClimateYear,
+       AbstractClimateTiming, ForwardClimate, ReversedClimate, HeldClimatology,
+       FIRST_FULL_YEAR, HELD_DECADE,
        AbstractRegimeStatistic, MonthlyValue, TrailingMinimum, TrailingMean,
        AnnualMinimumTemperature, AnnualMeanPrecipitation,
        ENVELOPES_DOI, PRIOR_RECORDS, PRIOR_MEMBERS, WFO_RELEASE, shrink_width,
        width_priors, wfo_authority, merge_envelopes,
        species_pool, scaled_pool, envelopes_record,
        africa_species,
-       MIN_EVI_MONTHS, seeding_scale, seeding_factors, months_back, fine_cells,
-       read_seeding_grid, seeding_rows, recency_weight, scale_to_total,
-       grid_cells, fill_to_capacity, positioning_layers, africa_ecosystem,
-       gbif_record,
-       burnin_table, run_burnin!,
-       DIVERSITY_ORDERS, population, abundance_totals,
-       metacommunity_diversity,
-       record_diversity
+       MIN_EVI_MONTHS, seeding_layer, months_back, scale_to_total,
+       positioning_layers, africa_ecosystem, gbif_record,
+       DIVERSITY_ORDERS, METACOMMUNITY_MEASURES, record_diversity
 
 end

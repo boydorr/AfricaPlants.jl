@@ -11,20 +11,21 @@
 # | `AFRICA_SAVEDIR` | `./Africa_run` | where the `diversity_*.csv` are read and the figure written |
 # | `AFRICA_SEED`    | `1`            | which replicate's records to draw               |
 #
-# It draws the runs alone, from 1940. The settling hold before them is left out: its years are not
-# calendar years, so drawing them to the left of 1940 reads as a decade of the 1930s that was never
+# It draws the runs alone, from 1941. The settling hold before them is left out: its years are not
+# calendar years, so drawing them to the left of 1941 reads as a decade of the 1930s that was never
 # simulated. `diversity_hold_seed<N>.csv` holds them for anyone who wants them.
 #
 # It reads the yearly tables every stage writes, not the runs themselves, so it costs nothing to
 # redraw. Writes `timeseries.pdf` beside the runs.
 
+using AfricaPlants: FIRST_FULL_YEAR, HELD_DECADE
 using CSV
 using DataFrames
 using Plots
 
 const SAVEDIR = get(ENV, "AFRICA_SAVEDIR", joinpath(pwd(), "Africa_run"))
 const SEED = get(ENV, "AFRICA_SEED", "1")
-const START = 1940
+const START = FIRST_FULL_YEAR
 
 # One stage's yearly record. `offset` puts its `years` on the calendar: the hold ends where the
 # forward run and the control begin, so it is drawn to the left of them.
@@ -54,7 +55,8 @@ control = stage("neutral", START)
 function panel(of, title, ylabel; legend = false)
     plt = plot(title = title, titleloc = :left, ylabel = ylabel,
                xlabel = "year", legend = legend, grid = false)
-    for (table, label, colour) in ((control, "$(START) climate held",
+    for (table, label, colour) in ((control,
+                                    "$(first(HELD_DECADE))-$(last(HELD_DECADE)) average held",
                                     :steelblue),
                                    (forward, "$(START) to 2026 climate",
                                     :firebrick))

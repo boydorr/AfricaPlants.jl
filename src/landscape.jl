@@ -86,7 +86,7 @@ end
     AbstractClimateTiming
 
 How a run's climate is laid out in time: [`ForwardClimate`](@ref), [`ReversedClimate`](@ref) or
-[`HeldClimateYear`](@ref).
+[`HeldClimatology`](@ref).
 """
 abstract type AbstractClimateTiming end
 
@@ -106,14 +106,35 @@ zero, as an undated series held at the first month once it is passed.
 struct ReversedClimate <: AbstractClimateTiming end
 
 """
-    HeldClimateYear(year)
+    HeldClimatology(years)
 
-The twelve ERA5 months of `year` as a climatology of the months of the year, repeated for as long
-as a run lasts.
+Each calendar month's climate averaged over `years`, as a climatology of the months of the year,
+repeated for as long as a run lasts. Every layer is summarised month by month as a forward run sees
+it, its twelve-month statistic included, before the months are averaged, so the held year is the
+average of what a forward run through `years` meets.
+
+  - `years`: the calendar years averaged, each of which the climate must hold whole.
 """
-struct HeldClimateYear <: AbstractClimateTiming
-    year::Int
+struct HeldClimatology <: AbstractClimateTiming
+    years::UnitRange{Int}
+    HeldClimatology(years::AbstractUnitRange{<:Integer}) = new(years)
 end
+
+"""
+    FIRST_FULL_YEAR
+
+The first year every month of which has a full twelve months of ERA5 ending in it, ERA5 starting in
+January 1940: the year a backwards run goes back to and a forward run starts.
+"""
+const FIRST_FULL_YEAR = 1941
+
+"""
+    HELD_DECADE
+
+The years whose climatology the settling hold and the control repeat, the decade from
+[`FIRST_FULL_YEAR`](@ref).
+"""
+const HELD_DECADE = FIRST_FULL_YEAR:(FIRST_FULL_YEAR + 9)
 
 """
     AbstractRegimeStatistic
@@ -183,24 +204,20 @@ function _summarised(r, statistic::AbstractRegimeStatistic)
 end
 
 # The raster `r` summarised by `statistic` and laid out as `timing` says. A calendar order is
-# summarised before it is reversed, so that a month looks back over the same months whichever way
-# the run passes it; a held year is summarised over its own twelve months, which makes it constant.
+# summarised before it is reversed or averaged into a climatology, so that a month looks back over the
+# same months whichever way a run passes it.
 function _laidout(r, statistic::AbstractRegimeStatistic,
                   timing::AbstractClimateTiming)
     return _retime(_summarised(r, statistic), timing)
-end
-function _laidout(r, statistic::AbstractRegimeStatistic,
-                  timing::HeldClimateYear)
-    return _summarised(_retime(r, timing), statistic)
 end
 
 # What a series of each timing does past its last slice, and what its coordinates mean.
 _atend(::ForwardClimate) = HoldAtEnd()
 _atend(::ReversedClimate) = HoldAtEnd()
-_atend(::HeldClimateYear) = RepeatAtEnd()
+_atend(::HeldClimatology) = RepeatAtEnd()
 _calendar(::ForwardClimate) = nothing
 _calendar(::ReversedClimate) = UndatedSeries()
-_calendar(::HeldClimateYear) = MonthOfYearSeries()
+_calendar(::HeldClimatology) = MonthOfYearSeries()
 
 # The raster `r`, a monthly stack on real dates, laid out as `timing` says.
 _retime(r, ::ForwardClimate) = r
@@ -210,12 +227,28 @@ function _retime(r, ::ReversedClimate)
     return _slices(r, n:-1:1, (0:(n - 1)) .* 1.0month_mean_duration)
 end
 
-function _retime(r, timing::HeldClimateYear)
+function _retime(r, timing::HeldClimatology)
     dates = DimensionalData.lookup(r.array, DimensionalData.Ti)
-    months = findall(t -> Dates.year(t) == timing.year, dates)
-    length(months) == 12 ||
-        error("the climate holds $(length(months)) months of $(timing.year), not twelve")
-    return _slices(r, months, (1:12) .* 1.0month_mean_duration)
+    t = DimensionalData.dimnum(r.array, DimensionalData.Ti)
+    # Averaged as bare numbers and given their unit back, as `_summarised` reduces.
+    unit = Unitful.unit(eltype(r.array))
+    data = ustrip.(unit, parent(r.array))
+    out = similar(data, ntuple(d -> d == t ? 12 : size(data, d), ndims(data)))
+    for month in 1:12
+        which = findall(d -> Dates.year(d) in timing.years &&
+                             Dates.month(d) == month, dates)
+        length(which) == length(timing.years) ||
+            error("the climate holds $(length(which)) months of $(Dates.monthname(month)) " *
+                  "in $(timing.years), not $(length(timing.years))")
+        selectdim(out, t, month) .= dropdims(mean(selectdim(data, t, which),
+                                                  dims = t), dims = t)
+    end
+    first_year = findall(d -> Dates.year(d) == first(timing.years), dates)
+    held = _slices(r, first_year, (1:12) .* 1.0month_mean_duration)
+    return EcoSISTEM.ClimateRaster(ERA,
+                                   DimensionalData.rebuild(held.array,
+                                                           data = out .* unit),
+                                   r.code)
 end
 
 # The slices `which` of raster `r`, in that order, relabelled with elapsed `times`.

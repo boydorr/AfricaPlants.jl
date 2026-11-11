@@ -38,15 +38,32 @@
     - ERA5 runs to the last month of final data (August 2026): `data/src/era5_download.jl
       --through=2026-08` fetches a year's months so far and refuses preliminary ERA5T months.
     - The backwards burn-in starts at the climate's last month (`era5_last_month`). A record made
-      after it counts in the starting shares and is no longer added on top. The forward run and the
-      control still run from 1940 to 2025. `burnin_table`, `seeding_rows` and `months_back` take
-      `start` with no default.
+      after it counts in the starting shares and is no longer added on top. `burnin_table`,
+      `seeding_rows` and `months_back` take `start` with no default.
     - A species draws its mean dispersal distance from its own random stream, so the distance does
       not depend on the other species in the pool. Seeds now reach neighbouring cells as the kernel
       says, since EcoSISTEM 0.11.1 corrects a lookup that sent too few or none across cells tens of
       kilometres wide. Every result moves.
+    - The burn-in goes back to January 1941 and the forward run starts there, 1941 being the first
+      year whose every month has twelve months of climate behind it (`FIRST_FULL_YEAR`). The forward
+      run and the control run 1941 to 2025; records made in 1940 shape the start alone.
+    - The settling hold and the control repeat the average year of 1941 to 1950
+      (`HeldClimatology(HELD_DECADE)`) in place of 1940 alone: each month is the decade's mean of what
+      a forward run meets that month.
     - `africa_ecosystem(...; from, elapsed, changing)` continues a saved state, `changing` naming the
       layers whose rule the new run changes, such as `CLIMATE_LAYERS`.
+    - The burn-in seeds through EcoSISTEM's placements. `ToCapacity(FromOccurrences(...))` fills
+      each cell at the start, and an `AddAbundance(FromOccurrences(...))` intervention adds each
+      record at its month. A record weighs its 0.05 degree cell's EVI times land area, shared among
+      every plant record made there (`seeding_layer`, `WeightPerCell`). Recent records no longer
+      weigh more in the start.
+    - `data/src/evi_reliable.jl` writes the reliable mean EVI as a GeoTIFF, which the runs read in
+      place of `seeding_grid.nc`.
+    - Each stage records through EcoSISTEM's `RecordTotals` and `RecordDiversity`, and
+      `record_diversity(path, stage, years, totals, diversity, k)` appends a year from them. The
+      values are unchanged.
+    - `examples/paper/recorded.jl` reads `recorded_richness.csv`, the species the burn-in placed in
+      each cell, rather than placing the records itself.
   - Added
     - Blessing tests, in `test/canonical/`: `Pkg.test(test_args = ["canonical"])` runs one
       replicate's small-scale chain on the real data and checks the digests of its inputs and what
@@ -82,6 +99,12 @@
   - Removed
     - `load_abundances`, `abundance_table` and `continue_from!`: `africa_ecosystem(...; from)`
       continues a saved state. `record_diversity!` goes too; `record_diversity` stays.
+    - `burnin_table`, `run_burnin!`, `fill_to_capacity`, `grid_cells`, `seeding_scale`,
+      `seeding_factors`, `fine_cells`, `read_seeding_grid`, `seeding_rows` and `recency_weight`:
+      EcoSISTEM's placements seed the burn-in. `population`, `abundance_totals` and
+      `metacommunity_diversity`: its recorders keep the same values. `data/src/seeding_grid.jl`.
+    - `HeldClimateYear`: `HeldClimatology(year:year)` holds one year, its months summarised as a
+      forward run meets them.
 - v0.2.0
   - Changed
     - Rebuilt on EcoSISTEM 0.8 and Julia 1.11: the package now decides a projected Africa

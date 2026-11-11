@@ -8,6 +8,5 @@
 data/era5/
 data/records_africa.csv
 data/species_widths.csv
-data/seeding_grid.nc
-data/evi/evi_mean_2001_2025.nc
+data/evi/evi_reliable_2001_2025.tif
 data/plant_trait/data/global_plant_climate_envelopes.csv

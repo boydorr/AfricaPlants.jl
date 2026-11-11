@@ -4,7 +4,7 @@
 #
 #     fair pull --local examples/paper/forward.yaml && fair run examples/paper/forward.yaml
 run_metadata:
-  description: The forward run of one replicate of AfricaPlants' case study through the climate from 1940, or its control under the climate of 1940 held
+  description: The forward run of one replicate of AfricaPlants' case study through the climate from 1941, or its control under the 1941-1950 average year held
   default_input_namespace: AfricaPlants
   default_output_namespace: AfricaPlants
   # `JULIA_NUM_THREADS` where it is set, else every core: `fair` runs this with `sh`, which expands it.
@@ -33,7 +33,7 @@ write:
   file_type: jld2
   public: false
 - data_product: CaseStudy/*/Neutral/Diversity_*
-  description: The individuals, species and diversity of the whole landscape in each year of a control, the climate of 1940 held
+  description: The individuals, species and diversity of the whole landscape in each year of a control, the 1941-1950 average year held
   file_type: csv
 - data_product: CaseStudy/*/Neutral/Cells_*
   description: Each cell's normalised alpha diversity at each order, and each species' and each cell's individuals, in each year of a control, with its grid

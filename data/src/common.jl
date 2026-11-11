@@ -64,7 +64,7 @@ const SCRIPTS = Dict("Inventory" => "inventory.jl",
                      "SpeciesTraits" => "species_traits.jl",
                      "SpeciesWidths" => "species_widths.jl",
                      "WidthHoldout" => "width_holdout.jl",
-                     "SeedingGrid" => "seeding_grid.jl")
+                     "EVIReliable" => "evi_reliable.jl")
 function _writer()
     script = string(nameof(@__MODULE__))
     m = @__MODULE__

@@ -22,9 +22,8 @@ const CHAIN_ENVELOPES = get(ENV, "AFRICA_ENVELOPES",
 const CHAIN_TABLES = [
     "records_africa.csv" => joinpath(CHAIN_DATA, "records_africa.csv"),
     "species_widths.csv" => joinpath(CHAIN_DATA, "species_widths.csv"),
-    "seeding_grid.nc" => joinpath(CHAIN_DATA, "seeding_grid.nc"),
-    "evi_mean_2001_2025.nc" =>
-        joinpath(CHAIN_DATA, "evi", "evi_mean_2001_2025.nc"),
+    "evi_reliable_2001_2025.tif" =>
+        joinpath(CHAIN_DATA, "evi", "evi_reliable_2001_2025.tif"),
     "global_plant_climate_envelopes.csv" => CHAIN_ENVELOPES]
 
 # The SHA-256 of a file, in hexadecimal.

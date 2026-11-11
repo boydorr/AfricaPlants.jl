@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 #
-# The forward run: the settled state `burnin.jl` wrote, run from 1940 through the ERA5 months
+# The forward run: the settled state `burnin.jl` wrote, run from 1941 through the ERA5 months
 # in calendar order, recording normalised subcommunity alpha diversity in every cell each 1 January,
 # with each species' and each cell's individuals.
-# One replicate per seed; `AFRICA_NEUTRAL=true` repeats the 1940 climate throughout instead, the
-# neutral control. A replicate is a burn-in, a forward run and a control that share one `AFRICA_SEED`
+# One replicate per seed; `AFRICA_NEUTRAL=true` repeats the 1941-1950 average year throughout
+# instead, the neutral control, the climate the burn-in settled under. A replicate is a burn-in, a forward run and a control that share one `AFRICA_SEED`
 # and so one settled state, `AFRICA_SPECIES_SEED` holding the species themselves the same throughout;
 # the control differs from its forward run only in climate. Another seed repeats the whole
 # experiment, its own burn-in included, so that no result rests on a single settled state. Each year both write the whole landscape's diversity to
@@ -21,7 +21,7 @@
 # | `AFRICA_DISTRIBUTED` | `auto`             | `serial` or `mpi` to demand one                  |
 # | `AFRICA_SEED`     | `1`            | the replicate: seeds the run's random streams            |
 # | `AFRICA_SPECIES_SEED` | `1`        | seeds the species' own draws, as the burn-in's did       |
-# | `AFRICA_NEUTRAL`  | `false`        | `true` to repeat the 1940 climate                        |
+# | `AFRICA_NEUTRAL`  | `false`        | `true` to repeat the 1941-1950 average year              |
 # | `AFRICA_SAVEDIR`  | `./Africa_run` | where the settled state is read and the diversity written |
 # | `AFRICA_START`    | `start_seed<N>_00.jld2` | the settled state in `AFRICA_SAVEDIR` to start from: this seed's own burn-in |
 # | `AFRICA_SAVEEND`  | `true`         | `false` to skip saving the state the run ends in, which is as large as the settled state it started from |
@@ -36,7 +36,7 @@ using CSV
 using DataFrames
 using JLD2
 using DimensionalData: DimensionalData
-using Diversity: norm_sub_alpha
+using Diversity: Diversity
 using MPI
 
 MPI.Initialized() || MPI.Init()
@@ -66,7 +66,7 @@ const NEUTRAL = get(ENV, "AFRICA_NEUTRAL", "false") == "true"
 const SAVEDIR = get(ENV, "AFRICA_SAVEDIR", joinpath(pwd(), "Africa_run"))
 const START = get(ENV, "AFRICA_START", "start_seed$(SEED)_00.jld2")
 const SAVEEND = get(ENV, "AFRICA_SAVEEND", "true") == "true"
-const YEARS = smallscale() ? 1 : 2025 - 1940 + 1
+const YEARS = smallscale() ? 1 : 2025 - FIRST_FULL_YEAR + 1
 
 say(xs...) = ISROOT && (println(xs...); flush(stdout))
 
@@ -89,7 +89,7 @@ area = africa_area(chosen.cellsize, regime = positioning.regime,
 # From the settled state, its clock back at the start and every species going on with its own random
 # stream, so that a forward run and its control go on from one state alike. The forward run changes
 # the rule of every climate layer; the control keeps the held year's.
-timing = NEUTRAL ? HeldClimateYear(1940) : ForwardClimate()
+timing = NEUTRAL ? HeldClimatology(HELD_DECADE) : ForwardClimate()
 eco = africa_ecosystem(species, area, timing, seed = SEED,
                        distributed = DISTRIBUTED,
                        from = joinpath(SAVEDIR, START), elapsed = 0.0s,
@@ -99,28 +99,27 @@ eco = africa_ecosystem(species, area, timing, seed = SEED,
 area = nothing
 Base.GC.gc()
 
-# The recorder is called from a callback of our own rather than passed to `simulate!`, so that the
-# whole landscape can be recorded and reported in the same place: EcoSISTEM records the year, we add
-# the year's metacommunity measures to `diversity_<stage>_seed<N>.csv` and report each decade.
+# The recorders are called from a callback of our own rather than passed to `simulate!`, so that a
+# year is recorded and reported in one place: the recorders keep each cell's normalised alpha
+# diversity, the landscape's metacommunity measures and each species' and each cell's individuals,
+# which say which species were lost and when, and where the individuals are. Each year's measures
+# are added to `diversity_<stage>_seed<N>.csv` as it is recorded, and each decade is reported.
 const QS = DIVERSITY_ORDERS
 const STAGE = NEUTRAL ? "neutral" : "forward"
-storage = zeros(length(parent(eco.habitat.active)), length(QS), YEARS + 1)
-recorder = RecordDiversity(storage, norm_sub_alpha, QS)
-# Each species' and each cell's individuals in every recorded year: which species were lost and
-# when, and where the individuals are, without keeping the whole landscape.
-species_totals = zeros(Int, length(pool), YEARS + 1)
-cell_totals = zeros(Int, length(parent(eco.habitat.active)), YEARS + 1)
+totals = RecordTotals(eco, YEARS + 1)
+recorder = RecordDiversity(eco, YEARS + 1, qs = QS,
+                           subcommunity = [Diversity.NormalisedAlpha],
+                           metacommunity = collect(METACOMMUNITY_MEASURES))
 started = time()
 @time simulate!(eco, YEARS * 1.0year, 1.0month_mean_duration,
                 every = EveryYear()) do occurrence
+    totals(eco, occurrence)
     recorder(eco, occurrence)
-    totals = abundance_totals(eco)
-    species_totals[:, occurrence.count] = totals.species
-    cell_totals[:, occurrence.count] = totals.cells
-    year = 1940 + occurrence.count - 1
+    year = FIRST_FULL_YEAR + occurrence.count - 1
     now = record_diversity(joinpath(SAVEDIR,
-                                    "diversity_$(STAGE)_seed$(SEED).csv"), eco,
-                           STAGE, occurrence.count - 1)
+                                    "diversity_$(STAGE)_seed$(SEED).csv"),
+                           STAGE, occurrence.count - 1, totals, recorder,
+                           occurrence.count)
     if occurrence.count == 1 || year % 10 == 0 || occurrence.count == YEARS + 1
         counts = now.counts
         say(year, ": ", round(Int, time() - started), " s elapsed, ",
@@ -150,10 +149,12 @@ if ISROOT
                                                           DimensionalData.lookup(eco.habitat.active,
                                                                                  dim)))
     end
-    jldsave(joinpath(SAVEDIR, name * ".jld2"), diversity = recorder.storage,
-            qs = QS, years = collect(1940:(1940 + YEARS)),
-            species = pool.species.name, species_totals = species_totals,
-            cell_totals = cell_totals,
+    # Each cell's normalised alpha, cells x orders x years.
+    jldsave(joinpath(SAVEDIR, name * ".jld2"),
+            diversity = recorder.subcommunity[1, :, :, :], qs = QS,
+            years = collect(FIRST_FULL_YEAR:(FIRST_FULL_YEAR + YEARS)),
+            species = pool.species.name, species_totals = totals.species,
+            cell_totals = totals.cells,
             active = vec(parent(eco.habitat.active)),
             shape = size(parent(eco.habitat.active)),
             y = centres(DimensionalData.Y), x = centres(DimensionalData.X),

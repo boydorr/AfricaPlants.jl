@@ -17,7 +17,7 @@ the pure functions, which `test/runtests.jl` exercises on fabricated inputs.
 | 1b | `twentycr_download.jl` | nothing: NOAA PSL serves 20CRv3 over plain HTTPS | `twentycr/SI-MO/`, five global monthly files spanning 1806 to 2015 (2 m temperature, precipitation rate, downward and upward shortwave, soil moisture by layer), for the extension before 1940 |
 | 1c | `evi_download.jl` | a NASA Earthdata token: `EARTHDATA_TOKEN` in the environment, or `~/.earthdata_token` | `evi/MOD13C2.A<year><day>.061.<production>.hdf`, the MODIS/Terra monthly vegetation index files for 2001 to 2025, one per month, global at 0.05 degrees |
 | 1d | `evi_mean.jl` | the MOD13C2 files | `evi/evi_mean_2001_2025.nc`: the mean EVI of good and marginal months at each cell, the stand-in for how many plants a cell holds: collection effort is records over EVI, so a record in a greener or less sampled cell seeds more individuals |
-| 1e | `seeding_grid.jl` | the mean EVI layer; EarthEnv land cover, downloaded by EcoSISTEM on first use | `seeding_grid.nc`: over the Africa box at 0.05 degrees, each cell's mean EVI (missing below 36 good months), its share available to plants (every land-cover class but open water, snow and ice, and urban) and its area, the grid a record's seeding factor is computed on |
+| 1e | `evi_reliable.jl` | the mean EVI layer | `evi/evi_reliable_2001_2025.tif`: over the Africa box at 0.05 degrees, each cell's mean EVI, missing below 36 good months, as a GeoTIFF the runs read as a layer; each record's seeding weight is its cell's EVI times land area, shared among the records made there |
 | 2 | `inventory.jl` | the netCDF files | `inventory.csv`: every file's variables, unit strings, time axis, lattice |
 | 3 | `gbif_download.jl` | a GBIF account: `GBIF_USER`, `GBIF_PWD`, `GBIF_EMAIL` in the environment, or `user`, `pwd`, `email` in `~/.gbifrc` | two downloads, `gbif/era5/<key>.csv` (1940 onward, the ERA5 years) and `gbif/early/<key>.csv` (1806-1939, the years only 20CRv3 reaches), each with its DOI in its provenance |
 | 3b | `centroids.jl` | nothing: GBIF's Catalogue of Centroids on GitHub, at a pinned commit | `centroids.csv`: country centroids, which `gbif_clean.jl` drops records near |
@@ -32,7 +32,7 @@ julia --project data/src/era5_download.jl    # hours, queued at the CDS; resumab
 julia --project data/src/twentycr_download.jl # about 2 GB, no credentials; extension only
 julia --project data/src/evi_download.jl     # about 29 GB, an Earthdata token; resumable
 julia --project data/src/evi_mean.jl
-julia --project data/src/seeding_grid.jl
+julia --project data/src/evi_reliable.jl
 julia --project data/src/inventory.jl
 julia --project data/src/gbif_download.jl --request-only   # submit both; GBIF emails when ready
 julia --project data/src/gbif_download.jl                  # later: wait if needed, then fetch
