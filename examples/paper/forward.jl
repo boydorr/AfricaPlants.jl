@@ -70,34 +70,34 @@ const YEARS = smallscale() ? 1 : 2025 - 1940 + 1
 
 say(xs...) = ISROOT && (println(xs...); flush(stdout))
 
-# The same species, in the same order, as the burn-in built: the settled state is indexed by them.
+# The same species as the burn-in built, which the settled state names.
 envelopes = CSV.read(ENVELOPES, DataFrame,
-                     select = [:species, :genus, :family, :order, :tmin,
-                         :tp, :ssr, :swvl1])
+                     select = [:species, :numrecords, :tmin, :tp, :ssr])
 widths = CSV.read(joinpath(DATA, "species_widths.csv"), DataFrame)
-pool = species_pool(envelopes, widths).pool
-if smallscale() || mediumscale()
-    records = CSV.read(joinpath(DATA, "records_africa.csv"), DataFrame,
-                       select = [:species])
-    pool = scaled_pool(pool, records.species)
-end
+pool = scaled_pool(species_pool(envelopes, widths,
+                                provenance = envelopes_record(ENVELOPES),
+                                verbosity = ISROOT ? :normal : :silent).pool)
 species = africa_species(pool, seed = SPECIES_SEED,
-                         provenance = envelopes_record(ENVELOPES))
+                         verbosity = ISROOT ? :normal : :silent)
 positioning = positioning_layers()
-chosen = choose_cellsize(nrow(pool), regime = positioning.regime,
+chosen = choose_cellsize(length(pool), regime = positioning.regime,
                          supply = positioning.supply)
 area = africa_area(chosen.cellsize, regime = positioning.regime,
                    supply = positioning.supply,
                    verbosity = ISROOT ? :normal : :silent)
 
+# From the settled state, its clock back at the start and every species going on with its own random
+# stream, so that a forward run and its control go on from one state alike. The forward run changes
+# the rule of every climate layer; the control keeps the held year's.
 timing = NEUTRAL ? HeldClimateYear(1940) : ForwardClimate()
 eco = africa_ecosystem(species, area, timing, seed = SEED,
-                       distributed = DISTRIBUTED)
+                       distributed = DISTRIBUTED,
+                       from = joinpath(SAVEDIR, START), elapsed = 0.0s,
+                       changing = NEUTRAL ? () : CLIMATE_LAYERS,
+                       provenance = gbif_record(GBIF))
 # The study area holds every raw layer read, tens of gigabytes, and nothing more is built on it.
 area = nothing
 Base.GC.gc()
-continue_from!(eco, load_abundances(joinpath(SAVEDIR, START)),
-               provenance = gbif_record(GBIF))
 
 # The recorder is called from a callback of our own rather than passed to `simulate!`, so that the
 # whole landscape can be recorded and reported in the same place: EcoSISTEM records the year, we add
@@ -108,7 +108,7 @@ storage = zeros(length(parent(eco.habitat.active)), length(QS), YEARS + 1)
 recorder = RecordDiversity(storage, norm_sub_alpha, QS)
 # Each species' and each cell's individuals in every recorded year: which species were lost and
 # when, and where the individuals are, without keeping the whole landscape.
-species_totals = zeros(Int, nrow(pool), YEARS + 1)
+species_totals = zeros(Int, length(pool), YEARS + 1)
 cell_totals = zeros(Int, length(parent(eco.habitat.active)), YEARS + 1)
 started = time()
 @time simulate!(eco, YEARS * 1.0year, 1.0month_mean_duration,
@@ -152,7 +152,7 @@ if ISROOT
     end
     jldsave(joinpath(SAVEDIR, name * ".jld2"), diversity = recorder.storage,
             qs = QS, years = collect(1940:(1940 + YEARS)),
-            species = pool.species, species_totals = species_totals,
+            species = pool.species.name, species_totals = species_totals,
             cell_totals = cell_totals,
             active = vec(parent(eco.habitat.active)),
             shape = size(parent(eco.habitat.active)),

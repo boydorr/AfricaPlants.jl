@@ -16,6 +16,15 @@ const AVAILABLE_CLASSES = (:needleleaf_trees, :evergreen_broadleaf_trees,
                            :regularly_flooded, :barren)
 
 """
+    CLIMATE_LAYERS
+
+The layers of [`africa_layers`](@ref) that follow the climate: the two regime layers and the light
+and water supplies. Each climate timing gives them a rule of its own. The available ground does not
+follow the climate.
+"""
+const CLIMATE_LAYERS = (:temperature, :rainfall, :light, :water)
+
+"""
     era5_dir()
 
 Return the directory the ERA5 monthly files are read from: `era5` under `AFRICA_DATADIR` if set,

@@ -18,7 +18,7 @@
       states (`*_end00.jld2`) beside the runs, which it used to open as runs and fail on.
     - CSV 1 is required: the record-cleaning script keeps parse problems quiet with its
       `on_error` keyword.
-    - EcoSISTEM 0.10.1 is required. Its `era5requests` puts the box in each ERA5 file's name
+    - EcoSISTEM 0.11.1 is required. Its `era5requests` puts the box in each ERA5 file's name
       (`era5_t2m_1940s_40N25W36S56E.nc`), so files fetched under 0.8 are renamed, with the `file` in
       each provenance record, or `data/src/era5_download.jl` fetches them again. `envelopes_record`
       and `gbif_record` return its `ProvenanceRecord`.
@@ -30,6 +30,15 @@
       which cites the paper they were made for as well.
     - A run in one process measures its yearly diversity on one snapshot of the landscape, holding
       one normalised copy of the abundances instead of one per measure; the values are unchanged.
+    - Species carry their accepted name in the WFO Plant List (`WFO_RELEASE`). Envelope rows naming
+      one species are merged, weighted by their records, and `accepted_names` renames the seeding
+      records to match. `species_pool` returns an EcoSISTEM `SpeciesPool`.
+    - A species draws its mean dispersal distance from its own random stream, so the distance does
+      not depend on the other species in the pool. Seeds now reach neighbouring cells as the kernel
+      says, since EcoSISTEM 0.11.1 corrects a lookup that sent too few or none across cells tens of
+      kilometres wide. Every result moves.
+    - `africa_ecosystem(...; from, elapsed, changing)` continues a saved state, `changing` naming the
+      layers whose rule the new run changes, such as `CLIMATE_LAYERS`.
   - Added
     - Blessing tests, in `test/canonical/`: `Pkg.test(test_args = ["canonical"])` runs one
       replicate's small-scale chain on the real data and checks the digests of its inputs and what
@@ -62,6 +71,9 @@
     - The stage scripts drop the study area once the last ecosystem is built on it, since it keeps
       every raw layer read, and the burn-in drops its own ecosystem before building the held
       years', so the two no longer overlap. The values are unchanged.
+  - Removed
+    - `load_abundances`, `abundance_table` and `continue_from!`: `africa_ecosystem(...; from)`
+      continues a saved state. `record_diversity!` goes too; `record_diversity` stays.
 - v0.2.0
   - Changed
     - Rebuilt on EcoSISTEM 0.8 and Julia 1.11: the package now decides a projected Africa

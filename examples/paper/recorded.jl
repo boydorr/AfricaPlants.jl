@@ -44,16 +44,15 @@ to the nearest simulated one within three cells.
 """
 function recorded_richness(cells::Integer)
     envelopes = CSV.read(ENVELOPES, DataFrame,
-                         select = [:species, :genus, :family, :order, :tmin,
-                             :tp, :ssr, :swvl1])
+                         select = [:species, :numrecords, :tmin, :tp, :ssr])
     widths = CSV.read(joinpath(DATA, "species_widths.csv"), DataFrame)
     pool = species_pool(envelopes, widths).pool
     records = CSV.read(joinpath(DATA, "records_africa.csv"), DataFrame,
                        select = [:species, :decimalLatitude, :decimalLongitude])
-    simulated = Set(pool.species)
-    filter!(r -> !ismissing(r.species) && r.species in simulated, records)
+    records.species = accepted_names(pool, records.species)
+    filter!(r -> !ismissing(r.species), records)
     positioning = positioning_layers()
-    chosen = choose_cellsize(nrow(pool), regime = positioning.regime,
+    chosen = choose_cellsize(length(pool), regime = positioning.regime,
                              supply = positioning.supply)
     area = africa_area(chosen.cellsize, regime = positioning.regime,
                        supply = positioning.supply)

@@ -33,6 +33,71 @@ The fewest well-recorded relatives a taxonomic group must hold to give a prior w
 const PRIOR_MEMBERS = 5
 
 """
+    WFO_RELEASE
+
+The release of the World Flora Online Plant List every species name is standardised against, so
+that the envelopes and the occurrence records, which name species by different checklists, meet on
+one accepted name.
+"""
+const WFO_RELEASE = "2026-06"
+
+"""
+    wfo_authority(; path = nothing)
+
+Return the name authority species names are standardised through: the WFO Plant List release
+[`WFO_RELEASE`](@ref), names WFO has not checked left out, and a name written alike for several
+species taken as the one of them WFO accepts, where it accepts one.
+
+  - `path`: where the release's file is kept, or `nothing` for EcoSISTEM's asset cache, which fetches
+    it on first use.
+"""
+function wfo_authority(; path::Union{Nothing, AbstractString} = nothing)
+    return WFOPlantList(release = WFO_RELEASE, prefer_accepted = true,
+                        path = path)
+end
+
+# The mean of `values` weighted by `weights`, over the entries that have a value; `missing` where none
+# does.
+function _weightedmean(values::AbstractVector, weights::AbstractVector)
+    known = [i for i in eachindex(values, weights) if !ismissing(values[i])]
+    isempty(known) && return missing
+    return sum(weights[i] * values[i] for i in known) /
+           sum(weights[i] for i in known)
+end
+
+"""
+    merge_envelopes(rows)
+
+Return the envelope values of a species that several of the envelopes' names mean, as a named tuple:
+`tmin`, `tp` and `ssr` each the mean over `rows` weighted by their `numrecords`, so that each is close
+to the mean over the names' records taken together, and `numrecords` their sum.
+
+  - `rows`: the envelopes' rows the names have, with `numrecords`, `tmin`, `tp` and `ssr`.
+"""
+function merge_envelopes(rows)
+    n = rows.numrecords
+    return (numrecords = sum(n), tmin = _weightedmean(rows.tmin, n),
+            tp = _weightedmean(rows.tp, n), ssr = _weightedmean(rows.ssr, n))
+end
+
+"""
+    merge_widths(rows)
+
+Return the widths of a species that several of the records' names mean, as a named tuple: the
+records each width rests on counted together (`tmin_n`, `tp_n`), and each width (`tmin_sd`,
+`tp_sd`) the root mean square of the names' widths weighted by their records. The spread between the
+names' own means is not in it, so it is no wider than the widest name's.
+
+  - `rows`: the widths' rows the names have, with `tmin_n`, `tmin_sd`, `tp_n` and `tp_sd`.
+"""
+function merge_widths(rows)
+    pooled(sd, n) = (w = _weightedmean(sd .^ 2, n); ismissing(w) ? w : sqrt(w))
+    return (tmin_n = sum(rows.tmin_n),
+            tmin_sd = pooled(rows.tmin_sd, rows.tmin_n),
+            tp_n = sum(rows.tp_n), tp_sd = pooled(rows.tp_sd, rows.tp_n))
+end
+
+"""
     shrink_width(width, n, prior, strength)
 
 Return the `width` across `n` records shrunk towards `prior`, which carries the weight of `strength`
@@ -89,17 +154,21 @@ function width_priors(widths::AbstractVector, counts::AbstractVector{<:Integer},
 end
 
 """
-    species_pool(envelopes, widths; strength = 12.0)
+    species_pool(envelopes, widths; strength = 12.0, authority = wfo_authority(),
+                 provenance = EcoSISTEM.ProvenanceRecord[], verbosity = :normal)
 
-Return the species a run simulates, as a named tuple of `pool`, a `DataFrame` with one row per
-species; `unmatched`, the names with records but no envelope, which are left out; and `nowidth`, the
-names whose records give no width of their own on one of the two tolerance axes, which are kept on
-their relatives' width.
+Return the species a run simulates, as a named tuple of `pool`, a `SpeciesPool` of every species the
+envelopes give a niche and the records found in Africa; `unmatched`, the records' names that mean no
+species of the pool, which are left out; and `nowidth`, the species whose records give no width of
+their own on one of the two tolerance axes, which are kept on their relatives' width.
 
-`pool` holds `species`, the temperature tolerance `tmin` and `tmin_sd` (K), the precipitation
-tolerance `tp` and `tp_sd` (mm/day), and the envelope's mean exposures `ssr` (J m^-2 per day) and
-`swvl1` (volumetric fraction), sorted by name. `swvl1` is carried for comparison and is not used by
-[`africa_species`](@ref), whose water demand is one rate for every species.
+Both tables' names are standardised through `authority`, so a species the envelopes and the records
+name differently is one species, under its accepted name; several envelope rows meaning one species
+are merged by [`merge_envelopes`](@ref), several width rows by [`merge_widths`](@ref). Each species
+holds the envelope's `tmin` (K), `tp` (m/day) and `ssr` (J m^-2 per day), its records' widths
+`tmin_sd` and `tp_sd` with the records each rests on, `tmin_n` and `tp_n`, its `genus`, `family` and
+`order` as the authority classifies it, and the widths [`africa_species`](@ref) takes, `tmin_width`
+and `tp_width`.
 
 The width across a species' records says little when the records are few - it grows with their
 number, and is zero for records from one place - so each width is shrunk towards that of the
@@ -107,65 +176,111 @@ species' well-recorded relatives by [`shrink_width`](@ref), the prior from [`wid
 over genus, family and order. A species with too few records to have a width at all takes the prior
 as it stands.
 
-  - `envelopes`: the published envelopes, with `species`, `genus`, `family`, `order`, `tmin`, `tp`
-    (m/day), `ssr` and `swvl1`.
-  - `widths`: the widths across each species' records, with `species`, `tmin_sd` (K) and `tp_sd`
-    (m/day), `missing` where a species has too few records, and the records each rests on, `tmin_n`
+  - `envelopes`: the published envelopes, with `species`, `numrecords`, `tmin`, `tp` (m/day) and
+    `ssr`.
+  - `widths`: the widths across each name's records, with `species`, `tmin_sd` (K) and `tp_sd`
+    (m/day), `missing` where a name has too few records, and the records each rests on, `tmin_n`
     and `tp_n`.
   - `strength`: how many records' weight the relatives' width carries against a species' own.
+  - `authority`: the name authority both tables' names are standardised through, by default
+    [`wfo_authority`](@ref).
+  - `provenance`: the record of the envelopes' file, kept among the pool's inputs.
+  - `verbosity`: how much the pool reports of the names it matched, as for `SpeciesPool`.
 """
 function species_pool(envelopes::DataFrame, widths::DataFrame;
-                      strength::Real = 12.0)
-    known = Set(envelopes.species)
-    unmatched = sort([s for s in widths.species if s ∉ known])
-    joined = innerjoin(select(widths, :species, :tmin_n, :tmin_sd, :tp_n,
-                              :tp_sd),
-                       select(envelopes, :species, :genus, :family, :order,
-                              :tmin, :tp, :ssr, :swvl1),
-                       on = :species)
-    taxonomy = collect(zip(joined.genus, joined.family, joined.order))
-    own = (tmin_sd = copy(joined.tmin_sd), tp_sd = copy(joined.tp_sd))
-    for (width, count) in ((:tmin_sd, :tmin_n), (:tp_sd, :tp_n))
-        priors = width_priors(own[width], joined[!, count], taxonomy)
-        joined[!, width] = Float64[ismissing(w) ? p :
-                                   shrink_width(w, n, p, strength)
-                                   for (w, n, p) in zip(own[width],
-                                                        joined[!, count],
-                                                        priors.prior)]
+                      strength::Real = 12.0, authority = wfo_authority(),
+                      provenance = EcoSISTEM.ProvenanceRecord[],
+                      verbosity::Symbol = :normal)
+    pool = SpeciesPool(select(envelopes, :species, :numrecords, :tmin, :tp,
+                              :ssr), authority = authority,
+                       merge = MergeWith(merge_envelopes),
+                       provenance = provenance, verbosity = verbosity)
+    add_trait!(pool, select(widths, :species, :tmin_n, :tmin_sd, :tp_n, :tp_sd),
+               merge = MergeWith(merge_widths), verbosity = verbosity)
+    # A species with no row among the widths was never recorded in Africa.
+    remove_species!(pool, verbosity = verbosity) do row
+        return ismissing(row.tmin_n)
     end
-    nowidth = sort(joined.species[ismissing.(own.tmin_sd) .| ismissing.(own.tp_sd)])
-    pool = joined
-    pool.tp = pool.tp .* 1000
-    pool.tp_sd = pool.tp_sd .* 1000
-    sort!(pool, :species)
-    return (pool = select(pool, :species, :tmin, :tmin_sd, :tp, :tp_sd, :ssr,
-                          :swvl1),
-            unmatched = unmatched, nowidth = nowidth)
+    for rank in ("genus", "family", "order")
+        add_trait!(pool, Symbol(rank)) do row
+            return EcoSISTEM.lineage(authority, row.id, rank)
+        end
+    end
+    table = pool.species
+    taxonomy = collect(zip(table.genus, table.family, table.order))
+    for (width, count, shrunk) in ((:tmin_sd, :tmin_n, :tmin_width),
+        (:tp_sd, :tp_n, :tp_width))
+        own, n = table[!, width], Int.(table[!, count])
+        priors = width_priors(own, n, taxonomy)
+        value = Dict(s => ismissing(w) ? p : shrink_width(w, c, p, strength)
+                     for (s, w, c, p) in zip(table.name, own, n, priors.prior))
+        add_trait!(pool, shrunk) do row
+            return value[row.name]
+        end
+    end
+    table = pool.species
+    nowidth = sort(table.name[ismissing.(table.tmin_sd) .| ismissing.(table.tp_sd)])
+    simulated = Set(table.name)
+    matched = name_table(pool)
+    recorded = Set(widths.species)
+    unmatched = sort(unique(row.name
+                            for row in eachrow(matched)
+                            if row.name in recorded &&
+                         (ismissing(row.species) ||
+                          !(row.species in simulated))))
+    return (pool = pool, unmatched = unmatched, nowidth = nowidth)
 end
 
 """
-    scaled_pool(pool, recorded)
+    scaled_pool(pool)
 
-Return the rows of `pool` a run at the scale `AFRICA_SCALE` names keeps, `recorded` holding the
-species name of every seeding record. A small run keeps the most-recorded species, which fill a
-coarse grid quickly. A medium run keeps species at even steps down the ranking by record count, so
-that it holds the rarely recorded in the proportion the whole pool does. A large run keeps them all.
+Return `pool` with only the species a run at the scale `AFRICA_SCALE` names, the others removed: a
+small run keeps the most-recorded species, which fill a coarse grid quickly, and a medium run keeps
+species at even steps down the ranking by record count, so that it holds the rarely recorded in the
+proportion the whole pool does; a large run keeps them all. A species' records are counted as the
+records its temperature width rests on, `tmin_n`.
+
+  - `pool`: a pool from [`species_pool`](@ref), changed in place.
 """
-function scaled_pool(pool::DataFrame, recorded::AbstractVector)
+function scaled_pool(pool::SpeciesPool)
     (smallscale() || mediumscale()) || return pool
-    counts = Dict{String, Int}()
-    for s in recorded
-        ismissing(s) || (counts[s] = get(counts, s, 0) + 1)
-    end
+    table = pool.species
     # By record count and then by name, so that the choice does not turn on the order of ties.
-    ranked = sort(pool.species, by = s -> (-get(counts, s, 0), s))
+    ranked = table.name[sortperm(collect(zip(-table.tmin_n, table.name)))]
     keep = smallscale() ? first(ranked, SCALED_SPECIES.small) :
            ranked[round.(Int,
                          range(1, length(ranked),
                                length = min(SCALED_SPECIES.medium,
                                             length(ranked))))]
     chosen = Set(keep)
-    return filter(r -> r.species in chosen, pool)
+    length(chosen) == length(ranked) && return pool
+    remove_species!(pool, verbosity = :silent) do row
+        return !(row.name in chosen)
+    end
+    return pool
+end
+
+"""
+    accepted_names(pool, names)
+
+Return the name of the species of `pool` each of `names` means, through the pool's name authority,
+or `missing` for a name that means none of them: how occurrence records, named by their own
+checklist, are matched to the species a run simulates.
+
+  - `pool`: the species, a `SpeciesPool` with a name authority.
+  - `names`: the names, `missing` allowed.
+"""
+function accepted_names(pool::SpeciesPool, names::AbstractVector)
+    simulated = Set(pool.species.name)
+    found = Dict{String, Union{Missing, String}}()
+    return map(names) do name
+        ismissing(name) && return missing
+        return get!(found, name) do
+            means = EcoSISTEM.resolve_name(pool.authority, name)
+            return isnothing(means.name) || !(means.name in simulated) ?
+                   missing : means.name
+        end
+    end
 end
 
 """
@@ -183,57 +298,64 @@ end
 
 """
     africa_species(pool; density = 1.0 / m^2, water = nothing, survival = 0.2, seed = 1,
-                   provenance = EcoSISTEM.ProvenanceRecord[])
+                   provenance = EcoSISTEM.ProvenanceRecord[], verbosity = :normal)
 
-Build the [`SpeciesList`](@ref) of the species in `pool`, the `pool` of [`species_pool`](@ref),
-named by their binomials and with no individuals.
+Build the [`SpeciesList`](@ref) of the species in `pool`, the `pool` of [`species_pool`](@ref), under
+their accepted names. Where their individuals start is the placement the ecosystem is built with.
 
 Each species is matched to temperature and precipitation by a Gaussian tolerance of the pool's mean
-and width, and demands three resources per individual: `1 / density` of ground, its own mean net
-solar radiation over that ground, and the rain falling on it at a rate that is the same for every
+and shrunk width, and demands three resources per individual: `1 / density` of ground, its own mean
+net solar radiation over that ground, and the rain falling on it at a rate that is the same for every
 species. A common demand makes water limit how many plants a place holds without favouring one
-species over another, which the precipitation tolerance already does. Birth and death are 0.15 a year, longevity 1, and each species' mean dispersal
-distance is drawn uniformly from 0.6 to 2.4 km.
+species over another, which the precipitation tolerance already does. Birth and death are 0.15 a
+year, longevity 1, and only the newly born disperse, by a Gaussian kernel whose mean distance each
+species draws uniformly from 0.6 to 2.4 km; a seed aimed at a cell that is not simulated is
+redistributed rather than lost.
 
 # Arguments
 
-  - `pool`: one row per species, as [`species_pool`](@ref) returns it.
+  - `pool`: the species, as [`species_pool`](@ref) returns them.
   - `density`: plants per unit of available ground, which sets the area each individual occupies.
   - `water`: the rainfall each individual demands over the ground it occupies, as a depth a day;
     `nothing` takes the median of the pool's precipitation optima, the rain a typical species is
     found under, so that a cell holds its full complement of plants only where it is at least that
     wet.
   - `survival`: how strongly a poor niche fit raises deaths and lowers births.
-  - `seed`: seeds the dispersal distances and the species' own random streams.
-  - `provenance`: the records of the data the pool was built from.
+  - `seed`: seeds the dispersal distances, each species' from a stream of its own, and the
+    species' own random streams.
+  - `provenance`: the records of anything the species were built from that the pool does not record.
+  - `verbosity`: how much the build reports of the values it read and filled, as for
+    `build_species`.
 """
-function africa_species(pool::DataFrame; density::Unitful.Quantity = 1.0 / m^2,
+function africa_species(pool::SpeciesPool;
+                        density::Unitful.Quantity = 1.0 / m^2,
                         water::Union{Nothing, Unitful.Quantity} = nothing,
                         survival::Real = 0.2, seed::Integer = 1,
-                        provenance = EcoSISTEM.ProvenanceRecord[])
-    n = nrow(pool)
+                        provenance = EcoSISTEM.ProvenanceRecord[],
+                        verbosity::Symbol = :normal)
     area = uconvert(m^2, 1 / density)
-    dispersal = rand(Random.Xoshiro(seed), Uniform(0.6, 2.4), n) .* km
-    perday = 1 / Unitful.d
-    rain = isnothing(water) ? median(pool.tp) * mm * perday : water
-    return build_species(n,
-                         tolerance = (temperature = (pool.tmin .* K,
-                                                     pool.tmin_sd .* K),
-                                      rainfall = (pool.tp .* mm .* perday,
-                                                  pool.tp_sd .* mm .* perday)),
-                         toleranceaxis = (temperature = AnnualMinimumTemperature,
-                                          rainfall = AnnualMeanPrecipitation),
-                         demand = (space = fill(area, n),
-                                   light = pool.ssr .* (J / m^2) .* perday .*
-                                           area,
-                                   water = fill(uconvert(Unitful.L / Unitful.d,
-                                                         rain * area), n)),
-                         demandaxis = (space = SurfaceArea,
-                                       light = SolarRadiation,
-                                       water = Precipitation),
-                         dispersal = dispersal,
-                         birth = 0.15 / year, death = 0.15 / year,
-                         longevity = 1.0, survival = survival,
-                         abundance = zeros(Int, n), names = pool.species,
-                         seed = seed, provenance = provenance)
+    rate = m / Unitful.d
+    rain = isnothing(water) ? median(pool.species.tp) * rate : water
+    temperature = ToleranceSpec(AnnualMinimumTemperature,
+                                μ = TraitColumn(:tmin, unit = K),
+                                σ = TraitColumn(:tmin_width, unit = K))
+    rainfall = ToleranceSpec(AnnualMeanPrecipitation,
+                             μ = TraitColumn(:tp, unit = rate),
+                             σ = TraitColumn(:tp_width, unit = rate))
+    light = DemandSpec(SolarRadiation,
+                       row -> row.ssr * (J / m^2) / Unitful.d * area)
+    drink = DemandSpec(Precipitation,
+                       uconvert(Unitful.L / Unitful.d, rain * area))
+    dispersal = MovementSpec(SeedDispersal(GaussianKernel,
+                                           disperse_safely = true),
+                             meandist = DrawFrom(Uniform(0.6, 2.4), unit = km))
+    return build_species(pool,
+                         tolerance = (temperature = temperature,
+                                      rainfall = rainfall),
+                         demand = (space = DemandSpec(SurfaceArea, area),
+                                   light = light, water = drink),
+                         movement = dispersal, birth = 0.15 / year,
+                         death = 0.15 / year, longevity = 1.0,
+                         survival = survival, seed = seed,
+                         provenance = provenance, verbosity = verbosity)
 end

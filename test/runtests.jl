@@ -562,12 +562,17 @@ end
     @test AfricaPlants._nearestactive(mask, CartesianIndex(2, 2), 2) ==
           LinearIndices(mask)[3, 1]
 
-    species = build_species(NUMSPECIES, tolerance = (295.0K, 50.0K),
-                            toleranceaxis = Temperature,
-                            demand = 10.0kJ / month_mean_duration,
-                            demandaxis = SolarRadiation, dispersal = 150.0km,
-                            abundance = 10^5, seed = 1)
-    eco = build_ecosystem(species, environment, seed = 1)
+    species = build_species(SpeciesPool(NUMSPECIES, verbosity = :silent),
+                            tolerance = ToleranceSpec(Temperature, μ = 295.0K,
+                                                      σ = 50.0K),
+                            demand = DemandSpec(SolarRadiation,
+                                                10.0kJ / month_mean_duration),
+                            movement = MovementSpec(SeedDispersal(GaussianKernel,
+                                                                  disperse_safely = true),
+                                                    meandist = 150.0km),
+                            seed = 1, verbosity = :silent)
+    eco = build_ecosystem(BySupply(total = 10^5), species, environment,
+                          seed = 1, verbosity = :silent)
     # Blessed (`canonical/README.md`): the grid and where the build put the founders, as this run's
     # input, then what a year makes of them.
     canonical("smoke/active_cells", count(environment.active))
@@ -586,35 +591,114 @@ end
     canonical("smoke/occupied_cells", count(>(0), totals.cells))
 end
 
+# A made-up WFO Plant List release, written as the Darwin Core zip a release is: one order, one family,
+# a genus per species, and a synonym among the envelopes' names and among the records'. "Z z" is a name
+# it does not hold.
+const FAKEWFO_ROWS = [
+    ("wfo-0000000400", "Plantae", "kingdom", "Accepted", "", ""),
+    ("wfo-0000000300", "Ordo", "order", "Accepted", "", "wfo-0000000400"),
+    ("wfo-0000000200", "Familia", "family", "Accepted", "", "wfo-0000000300"),
+    [("wfo-000000010$i", g, "genus", "Accepted", "", "wfo-0000000200")
+     for (i, g) in enumerate(["A", "B", "C", "D", "E"])]...,
+    ("wfo-0000000001", "A a", "species", "Accepted", "", "wfo-0000000101"),
+    ("wfo-0000000002", "A x", "species", "Synonym", "wfo-0000000001", ""),
+    ("wfo-0000000003", "B b", "species", "Accepted", "", "wfo-0000000102"),
+    ("wfo-0000000004", "B y", "species", "Synonym", "wfo-0000000003", ""),
+    ("wfo-0000000005", "C c", "species", "Accepted", "", "wfo-0000000103"),
+    ("wfo-0000000006", "D d", "species", "Accepted", "", "wfo-0000000104"),
+    ("wfo-0000000007", "E e", "species", "Accepted", "", "wfo-0000000105")]
+
+# Run `f` with the path of the made-up release, written into a temporary directory through GDAL's zip
+# file system, and remove the table EcoSISTEM caches from it afterwards, which lives in the real asset
+# cache.
+function withfakewfo(f)
+    return mktempdir() do dir
+        zip = joinpath(dir, "_DwC_backbone_R.zip")
+        header = ["taxonID", "scientificName", "scientificNameAuthorship",
+            "taxonRank", "taxonomicStatus", "acceptedNameUsageID",
+            "parentNameUsageID", "family"]
+        lines = [join(header, '\t');
+                 [join(["\"$x\""
+                        for x in (id, name, "L.", rank, status,
+                            accepted, parent, "Familia")], '\t')
+                  for (id, name, rank, status, accepted, parent) in FAKEWFO_ROWS]]
+        bytes = Vector{UInt8}(join(lines, '\n') * '\n')
+        handle = EcoSISTEM.ArchGDAL.GDAL.vsifopenl("/vsizip/" * zip *
+                                                   "/classification.csv", "wb")
+        EcoSISTEM.ArchGDAL.GDAL.vsifwritel(bytes, 1, length(bytes), handle)
+        EcoSISTEM.ArchGDAL.GDAL.vsifclosel(handle)
+        try
+            return f(zip)
+        finally
+            rm(EcoSISTEM._wfocachepath(zip), force = true)
+        end
+    end
+end
+
 @testset "The species pool" begin
-    envelopes = DataFrame(species = ["A a", "B b", "C c"],
-                          genus = ["A", "B", "C"], family = ["F", "F", "F"],
-                          order = ["O", "O", "O"],
-                          tmin = [280.0, 290.0, 300.0],
-                          tp = [0.001, 0.002, 0.003],
-                          ssr = [1.0e7, 1.5e7, 2.0e7],
-                          swvl1 = [0.1, 0.2, 0.3])
-    widths = DataFrame(species = ["A a", "B b", "C c", "D d"],
-                       tmin_n = [2, 100, 1, 50],
-                       tmin_sd = [1.0, 3.0, missing, 2.0],
-                       tp_n = [2, 100, 40, 50],
-                       tp_sd = [0.0, 0.002, 0.001, 0.001])
-    built = species_pool(envelopes, widths)
-    @test built.unmatched == ["D d"]
-    # C has one record of temperature and so no width of its own there, and is kept on the prior.
-    @test built.nowidth == ["C c"]
-    @test built.pool.species == ["A a", "B b", "C c"]
-    # No group holds five well-recorded species, so the prior is the median over the well recorded:
-    # 3 K from B alone, and 0.0015 m/day from B and C. A's two records barely count against the
-    # weight of twelve, a width of zero included; B's hundred mostly keep their own.
-    @test built.pool.tmin_sd ≈ [sqrt((2 * 1.0^2 + 12 * 3.0^2) / 14), 3.0, 3.0]
-    @test built.pool.tp ≈ [1.0, 2.0, 3.0]
-    @test built.pool.tp_sd ≈
-          [sqrt(12 * 1.5^2 / 14), sqrt((100 * 2.0^2 + 12 * 1.5^2) / 112),
-        sqrt((40 * 1.0^2 + 12 * 1.5^2) / 52)]
-    # With no weight on the prior the widths are the records' own.
-    @test species_pool(envelopes, widths, strength = 0).pool.tmin_sd ≈
-          [1.0, 3.0, 3.0]
+    envelopes = DataFrame(species = ["A a", "A x", "B b", "C c", "E e"],
+                          numrecords = [10, 30, 50, 5, 7],
+                          tmin = [280.0, 284.0, 290.0, 300.0, 295.0],
+                          tp = [0.001, 0.002, 0.002, 0.003, 0.002],
+                          ssr = [1.0e7, 2.0e7, 1.5e7, 2.0e7, 1.0e7])
+    widths = DataFrame(species = ["A a", "B b", "B y", "C c", "D d", "Z z"],
+                       tmin_n = [2, 100, 20, 1, 50, 3],
+                       tmin_sd = [1.0, 3.0, 6.0, missing, 2.0, 1.0],
+                       tp_n = [2, 100, 20, 40, 50, 3],
+                       tp_sd = [0.0, 0.002, 0.004, 0.001, 0.001, 0.001])
+    withfakewfo() do zip
+        wfo = WFOPlantList(release = WFO_RELEASE, prefer_accepted = true,
+                           path = zip)
+        built = species_pool(envelopes, widths, authority = wfo,
+                             verbosity = :silent)
+        pool = built.pool
+        # E was never recorded in Africa and goes; D has records and no envelope, and Z a name WFO
+        # does not hold, so neither is a species of the pool.
+        @test sort(pool.species.name) == ["A a", "B b", "C c"]
+        @test built.unmatched == ["D d", "Z z"]
+        # C has one record of temperature and so no width of its own there, and is kept on the prior.
+        @test built.nowidth == ["C c"]
+        row(name) = pool.species[only(findall(==(name), pool.species.name)), :]
+        # "A x" is a synonym of "A a": the two envelopes merge, weighted by their records.
+        @test row("A a").numrecords == 40
+        @test row("A a").tmin ≈ (10 * 280.0 + 30 * 284.0) / 40
+        @test row("A a").tp ≈ (10 * 0.001 + 30 * 0.002) / 40
+        @test row("A a").ssr ≈ (10 * 1.0e7 + 30 * 2.0e7) / 40
+        # "B y" is a synonym of "B b": its records join B's, the widths pooled by their records.
+        @test row("B b").tmin_n == 120
+        @test row("B b").tmin_sd ≈ sqrt((100 * 3.0^2 + 20 * 6.0^2) / 120)
+        @test row("B b").tp_sd ≈ sqrt((100 * 0.002^2 + 20 * 0.004^2) / 120)
+        @test (row("A a").genus, row("A a").family, row("A a").order) ==
+              ("A", "Familia", "Ordo")
+        # No group holds five well-recorded species, so the prior is the median over the well
+        # recorded: B alone for temperature, B and C for rain. A's two records barely count against
+        # the weight of twelve, a width of zero included; B's hundred and twenty mostly keep their
+        # own.
+        tprior = row("B b").tmin_sd
+        rprior = (row("B b").tp_sd + 0.001) / 2
+        @test row("A a").tmin_width ≈ shrink_width(1.0, 2, tprior, 12)
+        @test row("B b").tmin_width ≈ tprior
+        @test row("C c").tmin_width ≈ tprior
+        @test row("A a").tp_width ≈ shrink_width(0.0, 2, rprior, 12)
+        @test row("C c").tp_width ≈ shrink_width(0.001, 40, rprior, 12)
+        # With no weight on the prior the widths are the records' own.
+        unshrunk = species_pool(envelopes, widths, strength = 0,
+                                authority = wfo,
+                                verbosity = :silent).pool.species
+        @test unshrunk.tmin_width[unshrunk.name .== "A a"] ≈ [1.0]
+
+        # Records named by any name of a species find it, and a name of no species of the pool none.
+        @test isequal(accepted_names(pool,
+                                     ["B y", "A a", "D d", "Z z", missing]),
+                      ["B b", "A a", missing, missing, missing])
+
+        species = africa_species(pool, density = 4.0 / m^2, seed = 3,
+                                 verbosity = :silent)
+        @test species.names == pool.species.name
+        again = africa_species(pool, density = 4.0 / m^2, seed = 3,
+                               verbosity = :silent)
+        @test string(species.movement) == string(again.movement)
+    end
 
     # A species takes the median of its well-recorded relatives, itself left out, from the first
     # level with enough of them: species 1 from its genus, species 3 - whose genus holds only
@@ -632,11 +716,6 @@ end
     @test priors.depth == [3, 3, 1, 2]
     @test shrink_width(0.0, 2, 3.0, 12) ≈ sqrt(12 * 9 / 14)
     @test shrink_width(2.0, 5, 3.0, 0) ≈ 2.0
-
-    species = africa_species(built.pool, density = 4.0 / m^2, seed = 3)
-    @test species.names == ["A a", "B b", "C c"]
-    again = africa_species(built.pool, density = 4.0 / m^2, seed = 3)
-    @test species.movement.kernels[1].dist == again.movement.kernels[1].dist
 end
 
 @testset "Density widths" begin
@@ -651,13 +730,15 @@ end
                                   "data", "global_plant_climate_envelopes.csv"))
     if isfile(widths_file) && isfile(envelopes_file)
         pool = species_pool(CSV.read(envelopes_file, DataFrame),
-                            CSV.read(widths_file, DataFrame)).pool
+                            CSV.read(widths_file, DataFrame),
+                            verbosity = :silent).pool.species
         typical(widths) = sqrt(2pi) * exp(sum(log, widths) / length(widths))
         @test ustrip(K, EcoSISTEM.densitywidth(AnnualMinimumTemperature)) ≈
-              typical(pool.tmin_sd) rtol=0.05
+              typical(pool.tmin_width) rtol=0.05
+        # The widths are in m/day, the axis in mm/day.
         @test ustrip(mm / Unitful.d,
                      EcoSISTEM.densitywidth(AnnualMeanPrecipitation)) ≈
-              typical(pool.tp_sd) rtol=0.05
+              typical(1000 .* pool.tp_width) rtol=0.05
     else
         @test_skip "the species widths and envelopes are not on this machine"
     end

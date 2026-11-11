@@ -26,7 +26,7 @@
 
 ############# SLURM SETTINGS #############
 #SBATCH --account=project0000     # the project the job is charged to
-#SBATCH --job-name=africa         # the logs are <job name>-<job ID>.out and .err
+#SBATCH --job-name=paper          # the logs are <job name>-<job ID>.out and .err
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
 #SBATCH --partition=smp           # one node of 128 cores and 1 TB

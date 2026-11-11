@@ -17,33 +17,58 @@ function positioning_layers()
 end
 
 """
-    africa_ecosystem(species, area, timing = ForwardClimate(); seed = 1,
-                     epoch = Dates.Date(1940, 1, 1), dir = era5_dir(), distributed = :auto)
+    africa_ecosystem(species, area, timing = ForwardClimate(); placement = NoAbundance(),
+                     from = nothing, elapsed = nothing, changing = (), seed = 1,
+                     epoch = Dates.Date(1940, 1, 1), dir = era5_dir(), distributed = :auto,
+                     provenance = EcoSISTEM.ProvenanceRecord[])
 
 Build the ecosystem of `species` on `area` with the climate laid out as `timing` says, stepped by
-`MeanMonths()` from `epoch`, serial or across MPI ranks as the process was launched.
+`MeanMonths()` from `epoch`, serial or across MPI ranks as the process was launched: empty, or
+placed by `placement`, or the state a run saved at `from`, carried on.
 
 # Arguments
 
   - `species`: the species list, from [`africa_species`](@ref).
   - `area`: the study area, from [`africa_area`](@ref).
   - `timing`: an [`AbstractClimateTiming`](@ref).
+  - `placement`: where the individuals start, any placement `build_ecosystem` takes; none by
+    default.
+  - `from`: the path of a state a run saved, such as a `SaveAbundance` file, to start from in place of
+    `placement`. On the run's own `seed` every species goes on with the random stream it had there.
+  - `elapsed`: the clock a run from `from` starts at, `nothing` for the state's own; `0.0s` starts it
+    afresh at `epoch`.
+  - `changing`: the names of the layers whose rule a run from `from` changes, such as
+    [`CLIMATE_LAYERS`](@ref) when `timing` differs from the saved run's. The run warns of a layer whose
+    rule changed but is not named.
   - `seed`: seeds the run's random streams; replicates differ by seed.
   - `epoch`: the date elapsed time zero falls on.
   - `dir`: the directory of the ERA5 monthly files.
   - `distributed`: `:auto` builds a distributed ecosystem when the process is a live multi-rank MPI
     session and a serial one otherwise; `true` and `false` demand one or the other.
+  - `provenance`: the records of the data the run as a whole was given, such as the occurrence
+    records it was seeded from.
 """
 function africa_ecosystem(species, area::StudyArea,
                           timing::AbstractClimateTiming = ForwardClimate();
-                          seed::Integer = 1,
+                          placement = NoAbundance(),
+                          from::Union{Nothing, AbstractString} = nothing,
+                          elapsed::Union{Nothing, Unitful.Time} = nothing,
+                          changing = (), seed::Integer = 1,
                           epoch::Dates.Date = Dates.Date(1940, 1, 1),
-                          dir::AbstractString = era5_dir(), distributed = :auto)
+                          dir::AbstractString = era5_dir(), distributed = :auto,
+                          provenance = EcoSISTEM.ProvenanceRecord[])
     layers = africa_layers(timing, dir = dir)
     habitat = GridHabitat(regime = layers.regime, supply = layers.supply,
                           area = area)
-    return build_ecosystem(species, habitat, seed = seed, epoch = epoch,
-                           calendar = MeanMonths(), distributed = distributed)
+    isnothing(from) ||
+        return build_ecosystem(species, habitat, from = from, elapsed = elapsed,
+                               changing = changing, seed = seed, epoch = epoch,
+                               calendar = MeanMonths(),
+                               distributed = distributed,
+                               provenance = provenance)
+    return build_ecosystem(placement, species, habitat, seed = seed,
+                           epoch = epoch, calendar = MeanMonths(),
+                           distributed = distributed, provenance = provenance)
 end
 
 """
@@ -296,68 +321,4 @@ function record_diversity(path::AbstractString, eco, stage::AbstractString,
         end
     end
     return (counts = counts, measures = measures)
-end
-
-"""
-    load_abundances(path)
-
-Return the `species x cells` abundance matrix a `SaveAbundance` recorder wrote to `path`.
-"""
-load_abundances(path::AbstractString) = JLD2.load(path, "abun")
-
-"""
-    abundance_table(eco, abundances)
-
-Return an abundance table placing every individual of `abundances`, a `species x cells` matrix
-such as one saved from another ecosystem on the same grid and species, into `eco` at elapsed zero.
-"""
-function abundance_table(eco, abundances::AbstractMatrix{<:Integer})
-    species, cells, counts = Int[], Int[], Int[]
-    for (cell, column) in enumerate(eachcol(abundances))
-        for (sp, n) in enumerate(column)
-            n > 0 || continue
-            push!(species, sp)
-            push!(cells, cell)
-            push!(counts, n)
-        end
-    end
-    return (species = species, cell = cells, count = counts,
-            time = zeros(length(cells)) .* 1.0month_mean_duration)
-end
-
-"""
-    continue_from!(eco, abundances; provenance = EcoSISTEM.ProvenanceRecord[])
-
-Set `eco`, freshly built, to hold `abundances`, a `species x cells` matrix saved from an ecosystem
-on the same grid and species, by adding them all at elapsed zero. `provenance` records where the
-abundances came from.
-"""
-function continue_from!(eco, abundances::AbstractMatrix{<:Integer};
-                        provenance = EcoSISTEM.ProvenanceRecord[])
-    EcoSISTEM.applyinterventions!(eco,
-                                  Intervention(EveryStep(), ActiveCells(),
-                                               AddAbundanceTable(abundance_table(eco,
-                                                                                 abundances)),
-                                               provenance = provenance),
-                                  0.0month_mean_duration,
-                                  1.0month_mean_duration,
-                                  0)
-    return eco
-end
-
-"""
-    record_diversity!(eco, years; qs = [0.0, 1.0, 2.0, Inf])
-
-Run `eco` forward `years` years in monthly steps and return the recorder holding its normalised
-subcommunity alpha diversity in every cell at each order of `qs`, on every 1 January from the start:
-`storage[:, :, k]` holds cells by orders at the `k`th.
-"""
-function record_diversity!(eco, years::Integer;
-                           qs::AbstractVector{<:Real} = [0.0, 1.0, 2.0, Inf])
-    cells = length(parent(eco.habitat.active))
-    recorder = RecordDiversity(zeros(cells, length(qs), years + 1),
-                               norm_sub_alpha, qs)
-    simulate!(recorder, eco, years * 1.0year, 1.0month_mean_duration,
-              every = EveryYear())
-    return recorder
 end

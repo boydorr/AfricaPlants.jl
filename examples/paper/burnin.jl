@@ -82,33 +82,31 @@ function report(where, recorded, elapsed)
                " at q = ", join(DIVERSITY_ORDERS, ", "))
 end
 
-# The species and their records. A small run keeps the most-recorded species.
+# The species, under WFO's accepted names, and their records matched to them. A small run keeps
+# the most-recorded species.
 envelopes = CSV.read(ENVELOPES, DataFrame,
-                     select = [:species, :genus, :family, :order, :tmin,
-                         :tp, :ssr, :swvl1])
+                     select = [:species, :numrecords, :tmin, :tp, :ssr])
 widths = CSV.read(joinpath(DATA, "species_widths.csv"), DataFrame)
-built = species_pool(envelopes, widths)
+built = species_pool(envelopes, widths,
+                     provenance = envelopes_record(ENVELOPES),
+                     verbosity = ISROOT ? :normal : :silent)
+pool = scaled_pool(built.pool)
 records = CSV.read(joinpath(DATA, "records_africa.csv"), DataFrame,
                    select = [:species, :decimalLatitude, :decimalLongitude,
                        :year, :month])
-inpool = Set(built.pool.species)
-filter!(r -> r.species in inpool, records)
-pool = scaled_pool(built.pool, records.species)
-if nrow(pool) < nrow(built.pool)
-    chosen = Set(pool.species)
-    filter!(r -> r.species in chosen, records)
-end
-say(nrow(pool), " species (", length(built.unmatched),
-    " with no envelope left out, ", length(built.nowidth),
+records.species = accepted_names(pool, records.species)
+filter!(r -> !ismissing(r.species), records)
+say(length(pool), " species (", length(built.unmatched),
+    " record names with no envelope left out, ", length(built.nowidth),
     " on their relatives' width alone), ", nrow(records), " records")
 
 species = africa_species(pool, seed = SPECIES_SEED,
-                         provenance = envelopes_record(ENVELOPES))
+                         verbosity = ISROOT ? :normal : :silent)
 positioning = positioning_layers()
-chosen = choose_cellsize(nrow(pool), regime = positioning.regime,
+chosen = choose_cellsize(length(pool), regime = positioning.regime,
                          supply = positioning.supply)
 chosen.fits ||
-    error("$(nrow(pool)) species at $(chosen.cellsize) do not fit in the memory available")
+    error("$(length(pool)) species at $(chosen.cellsize) do not fit in the memory available")
 area = africa_area(chosen.cellsize, regime = positioning.regime,
                    supply = positioning.supply,
                    verbosity = ISROOT ? :normal : :silent)
@@ -131,7 +129,7 @@ seeding_rows = Intervention(EveryStep(), ActiveCells(),
 # Each species' and each cell's individuals in every recorded year of a stage, kept beside its
 # diversity: which species a stage lost and when, and where the individuals are.
 function totals(eco, years::Integer)
-    return (species = zeros(Int, nrow(pool), years + 1),
+    return (species = zeros(Int, length(pool), years + 1),
             cells = zeros(Int, length(parent(eco.habitat.active)), years + 1))
 end
 function keep!(kept, eco, column::Integer)
@@ -143,7 +141,7 @@ end
 function save_totals(stage::AbstractString, kept)
     ISROOT &&
         jldsave(joinpath(SAVEDIR, "totals_$(stage)_seed$(SEED).jld2"),
-                species = pool.species, species_totals = kept.species,
+                species = pool.species.name, species_totals = kept.species,
                 cell_totals = kept.cells,
                 years = collect(0:(size(kept.species, 2) - 1)))
     return nothing
@@ -164,18 +162,19 @@ end
 SaveAbundance(SAVEDIR, "burnin_seed$(SEED)_")(eco, (count = 1,))
 save_totals("burnin", backwards_totals)
 
-# The first year's climate repeated, from the state the backwards run reached and saved, on the same
-# study area, whose raw layer reads this build reuses. The backwards run's ecosystem is dropped
-# before the build, and the area, tens of gigabytes, after it.
+# The first year's climate repeated, from the state the backwards run reached and saved, its clock
+# back at the start and every species going on with its own random stream, on the same study area,
+# whose raw layer reads this build reuses. Every climate layer changes its rule here. The backwards
+# run's ecosystem is dropped before the build, and the area, tens of gigabytes, after it.
 eco = nothing
 Base.GC.gc()
 held = africa_ecosystem(species, area, HeldClimateYear(1940), seed = SEED,
-                        distributed = DISTRIBUTED)
+                        distributed = DISTRIBUTED,
+                        from = joinpath(SAVEDIR, "burnin_seed$(SEED)_00.jld2"),
+                        elapsed = 0.0s, changing = CLIMATE_LAYERS,
+                        provenance = gbif_record(GBIF))
 area = nothing
 Base.GC.gc()
-continue_from!(held,
-               load_abundances(joinpath(SAVEDIR, "burnin_seed$(SEED)_00.jld2")),
-               provenance = gbif_record(GBIF))
 held_totals = totals(held, HELD)
 started = time()
 @time simulate!(held, HELD * 1.0year, 1.0month_mean_duration,
