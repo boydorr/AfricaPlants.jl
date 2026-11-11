@@ -1,7 +1,7 @@
-source = "records_africa.csv joined to ERA5 monthly means, with the taxonomy of the published envelopes"
-bytes = 58424
+source = "records_africa.csv joined to ERA5 monthly means, with WFO's taxonomy of the species pool"
+bytes = 58396
 prior_from_records = 30
-written = "2026-09-20T20:57:33.650"
+written = "2026-11-11T02:53:05.811"
 prior_members = 5
 known_from_records = 100
 writer = "data/src/width_holdout.jl"

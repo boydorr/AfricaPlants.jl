@@ -13,7 +13,7 @@ the pure functions, which `test/runtests.jl` exercises on fabricated inputs.
 
 | step | script | needs | writes |
 | --- | --- | --- | --- |
-| 1 | `era5_download.jl` | a CDS account: `~/.cdsapirc`, read by CDSAPI.jl | `era5/era5_<var>_<decade>s.nc`, one variable per decade file; a decade not yet complete is `era5_<var>_<first>-<last>.nc` |
+| 1 | `era5_download.jl` | a CDS account: `~/.cdsapirc`, read by CDSAPI.jl | `era5/era5_<var>_<decade>s.nc`, one variable per decade file; a decade not yet complete is `era5_<var>_<first>-<last>.nc`; with `--through=<year>-<month>`, that year's months are `era5_<var>_<year>-<year>_m01-<month>.nc`, refused if any month is preliminary ERA5T |
 | 1b | `twentycr_download.jl` | nothing: NOAA PSL serves 20CRv3 over plain HTTPS | `twentycr/SI-MO/`, five global monthly files spanning 1806 to 2015 (2 m temperature, precipitation rate, downward and upward shortwave, soil moisture by layer), for the extension before 1940 |
 | 1c | `evi_download.jl` | a NASA Earthdata token: `EARTHDATA_TOKEN` in the environment, or `~/.earthdata_token` | `evi/MOD13C2.A<year><day>.061.<production>.hdf`, the MODIS/Terra monthly vegetation index files for 2001 to 2025, one per month, global at 0.05 degrees |
 | 1d | `evi_mean.jl` | the MOD13C2 files | `evi/evi_mean_2001_2025.nc`: the mean EVI of good and marginal months at each cell, the stand-in for how many plants a cell holds: collection effort is records over EVI, so a record in a greener or less sampled cell seeds more individuals |
@@ -24,8 +24,8 @@ the pure functions, which `test/runtests.jl` exercises on fabricated inputs.
 | 3c | `gardens.jl` | nothing: CoordinateCleaner's institutions gazetteer on GitHub, at a pinned commit | `gardens.csv`: botanic gardens, which `gbif_clean.jl` flags records near |
 | 3d | `envelopes.jl` | the EIDC's climate envelopes, downloaded by hand and unpacked into `plant_trait/` | `plant_trait/data/global_plant_climate_envelopes.csv.provenance.toml`, the table's record, naming the dataset and the paper it was made for from their DOIs; tracked, so a run looks nothing up |
 | 4 | `gbif_clean.jl` | the GBIF CSVs | `records.csv` from the `era5` download and `records_early.csv` from `early`: one row per usable record, cleaned, with three flag columns |
-| 5 | `species_traits.jl` | `records.csv`, a cached WorldClim layer to place the continent outline | `records_africa.csv`, the records the model seeds from |
-| 6 | `species_widths.jl` | `records_africa.csv`, the ERA5 `t2m` and `tp` files | `species_widths.csv`: per species name, the spread across its records of the twelve-month minimum temperature (records on the quarter-degree lattice left out) and mean precipitation (also records near or naming a botanic garden), missing below two records |
+| 5 | `species_traits.jl` | `records.csv`, a cached WorldClim layer to place the continent outline, the WFO Plant List release `AfricaPlants` names | `records_africa.csv`, the records the model seeds from, each with the WFO species its name means |
+| 6 | `species_widths.jl` | `records_africa.csv`, the ERA5 `t2m` and `tp` files | `species_widths.csv`: per WFO species, the spread across its records of the twelve-month minimum temperature (records on the quarter-degree lattice left out) and mean precipitation (also records near or naming a botanic garden), missing below two records |
 
 ```sh
 julia --project data/src/era5_download.jl    # hours, queued at the CDS; resumable; --dry-run lists
@@ -101,7 +101,8 @@ cannot find its credentials says which are missing and stops before touching the
   arboretum. Regenerated rather than committed, since CoordinateCleaner is GPL-3.
 - **`records_africa.csv`**: the records of `records.csv` that fall in an active cell of a
   geographic grid cut to Natural Earth's continent-level Africa (land inside the outline), flags
-  included. This is the seeding dataset: every flagged record is kept for seeding, since a garden
+  included. `wfo_species` and `wfo_id` name the species GBIF's `species` means in the WFO Plant List,
+  resolved as the run's species pool resolves names, `missing` where WFO does not recognise it. This is the seeding dataset: every flagged record is kept for seeding, since a garden
   plant grows where it is recorded and a lattice point is close enough to place a seed in a grid
   cell. They are placed on the run's own grid at run time, since that grid is chosen then, and
   the effort raster is counted from them at the same point.

@@ -95,36 +95,36 @@ function _supplies(eco, name::Symbol)
 end
 
 """
-    burnin_table(eco, records, grid; density = 1.0 / m^2, start = (year = 2025, month = 12),
-                 halflife = 20.0year, snap = 3)
+    burnin_table(eco, records, grid; start, density = 1.0 / m^2, halflife = 20.0year, snap = 3)
 
 Return what a backwards burn-in of `eco` adds, as a named tuple: `table`, the abundance table for an
 `AddAbundanceTable`, and the numbers that went into it - the EVI scale `c` and the continental
 `scale`, the records `used`, those `outside` the fine grid, those `snapped` to a nearby active cell
-and those left in an `inactive` cell, and the
-individuals `started` with, `added` over the burn-in and added as `extra` from records after `start`.
+and those left in an `inactive` cell, the individuals `started` with and `added` over the burn-in,
+and how many records were made `later` than `start`.
 
 Half the individuals are present at elapsed zero and half arrive as the run passes the months their
 records were made, across the continent as a whole. The rows at elapsed zero fill each cell to what
 its resources hold at the run's first month, the species' shares taken from their records in the
 cell, each weighted by its seeding factor and by [`recency_weight`](@ref). Every record is then added
 at its own month, by its seeding factor times one continental scale and at least one individual, the
-scale chosen so that the records within the run add as many individuals as the start holds. Records
-made after `start` are added at elapsed zero on top of both halves.
+scale chosen so that the records within the run add as many individuals as the start holds. A record
+made after `start` counts in the starting shares and is not added.
 
 # Arguments
 
   - `eco`: the ecosystem, built with [`ReversedClimate`](@ref).
   - `records`: the seeding records of `eco`'s species, as [`seeding_rows`](@ref) takes them.
   - `grid`: the fine seeding grid, from [`read_seeding_grid`](@ref).
+  - `start`: the month the backwards run begins at, the last month of the climate, as
+    [`era5_last_month`](@ref) gives it.
   - `density`: plants per unit of available ground, as the species were built with.
-  - `start`: the month the backwards run begins at, the last month of the climate.
   - `halflife`: how long before `start` a record's weight in the starting shares halves.
   - `snap`: how many cells a record in an inactive cell may be moved to reach an active one.
 """
 function burnin_table(eco, records::DataFrame, grid::NamedTuple;
+                      start::NamedTuple,
                       density::Unitful.Quantity = 1.0 / m^2,
-                      start::NamedTuple = (year = 2025, month = 12),
                       halflife::Unitful.Time = 20.0year, snap::Integer = 3)
     active = vec(parent(eco.habitat.active))
     space = _supplies(eco, :space)
@@ -147,24 +147,25 @@ function burnin_table(eco, records::DataFrame, grid::NamedTuple;
     started = sum(filled.count, init = 0)
     within = [t >= zero(t) for t in rows.time]
     scaled = scale_to_total(rows.count[within], started)
-    added = max.(scaled.scale .* rows.count, 1.0)
+    added = max.(scaled.scale .* rows.count[within], 1.0)
     positions = CartesianIndices(shape)[filled.cell]
     table = build_abundance_table(eco,
                                   (species = vcat(names[filled.species],
-                                                  rows.species),
-                                   y = vcat([p[1] for p in positions], rows.y),
-                                   x = vcat([p[2] for p in positions], rows.x),
+                                                  rows.species[within]),
+                                   y = vcat([p[1] for p in positions],
+                                            rows.y[within]),
+                                   x = vcat([p[2] for p in positions],
+                                            rows.x[within]),
                                    time = vcat(zeros(length(filled.cell)) .*
                                                1.0month_mean_duration,
-                                               rows.time),
+                                               rows.time[within]),
                                    count = vcat(Float64.(filled.count),
                                                 added)))
     return (table = table, c = seeded.c, scale = scaled.scale,
             used = seeded.used, outside = seeded.outside,
             snapped = seeded.snapped, inactive = seeded.inactive,
-            started = started,
-            added = sum(added[within], init = 0.0),
-            extra = sum(added[.!within], init = 0.0))
+            started = started, added = sum(added, init = 0.0),
+            later = count(!, within))
 end
 
 """

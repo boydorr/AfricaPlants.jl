@@ -36,6 +36,39 @@ function era5_dir()
 end
 
 """
+    era5_last_month(dir = era5_dir(); codes = ("t2m", "tp", "ssr"))
+
+Return the last month of the ERA5 files in `dir` as `(year = y, month = m)`: the month a backwards
+run starts from. Every variable in `codes` must end in the same month, or the climates of a reversed
+run would not line up.
+
+  - `dir`: the directory of the ERA5 monthly files.
+  - `codes`: the ERA5 variables a run reads.
+"""
+function era5_last_month(dir::AbstractString = era5_dir();
+                         codes = ("t2m", "tp", "ssr"))
+    files = readdir(dir)
+    ends = map(codes) do code
+        mine = filter(f -> startswith(f, "era5_$(code)_") && endswith(f, ".nc"),
+                      files)
+        isempty(mine) && error("no era5_$(code)_*.nc under $dir")
+        last = maximum(mine) do f
+            NCDatasets.NCDataset(joinpath(dir, f)) do ds
+                time = haskey(ds, "valid_time") ? "valid_time" : "time"
+                return maximum(ds[time][:])
+            end
+        end
+        # By month alone: an accumulated variable's months are stamped at 06:00.
+        return (year = Dates.year(last), month = Dates.month(last))
+    end
+    allequal(ends) ||
+        error("the ERA5 variables end in different months: " *
+              join(("$c $(e.year)-$(e.month)" for (c, e) in zip(codes, ends)),
+                   ", "))
+    return first(ends)
+end
+
+"""
     available_ground()
 
 Return the layer of ground available to plants in each cell, the summed shares of the

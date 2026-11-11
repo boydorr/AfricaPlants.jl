@@ -81,14 +81,13 @@ function seeding_factors(c::Unitful.Quantity, evi::AbstractArray{<:Real},
 end
 
 """
-    months_back(year, month; start = (year = 2025, month = 12))
+    months_back(year, month; start)
 
 Return how many months each record's `(year, month)` lies before `start`, the month a backwards
 run begins at: zero for a record in that month, negative for one after it.
 """
 function months_back(year::AbstractVector{<:Integer},
-                     month::AbstractVector{<:Integer};
-                     start::NamedTuple = (year = 2025, month = 12))
+                     month::AbstractVector{<:Integer}; start::NamedTuple)
     first = start.year * 12 + start.month
     return [first - (y * 12 + mo) for (y, mo) in zip(year, month)]
 end
@@ -138,8 +137,7 @@ function read_seeding_grid(path::AbstractString)
 end
 
 """
-    seeding_rows(records, grid, habitat, landarea; density = 1.0 / m^2,
-                 start = (year = 2025, month = 12))
+    seeding_rows(records, grid, habitat, landarea; start, density = 1.0 / m^2, snap = 3)
 
 Return what a backwards run seeds from `records` onto `habitat`, as a named tuple: `rows`, the
 columns `species`, `y`, `x`, `time` and `count` that `build_abundance_table` takes, one per record;
@@ -158,15 +156,15 @@ before `start` it was made, as an elapsed time in months of `month_mean_duration
   - `grid`: the fine grid, as [`read_seeding_grid`](@ref) returns it.
   - `habitat`: the habitat the records are seeded into.
   - `landarea`: the available ground over `habitat`'s active cells.
-  - `density`, `start`: plants per unit of available ground, and the month the run begins at.
+  - `start`, `density`: the month the run begins at, and plants per unit of available ground.
   - `snap`: how many cells a record in an inactive cell may be moved to reach an active one, as for
     [`grid_cells`](@ref).
 """
 function seeding_rows(records::DataFrame, grid::NamedTuple,
                       habitat::GridHabitat,
                       landarea::Unitful.Area;
+                      start::NamedTuple,
                       density::Unitful.Quantity = 1.0 / m^2,
-                      start::NamedTuple = (year = 2025, month = 12),
                       snap::Integer = 3)
     nx, ny = length(grid.lon), length(grid.lat)
     centrelat = vec(repeat(reshape(grid.lat, 1, ny), nx, 1))

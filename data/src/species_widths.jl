@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 #
-# The niche widths of the Africa species: for each species in `records_africa.csv`, the standard
+# The niche widths of the Africa species: for each WFO species of `records_africa.csv`, the standard
 # deviation across its records of the twelve-month climate at each record, one width per tolerance
-# axis, each over the records that axis trusts.
+# axis, each over the records that axis trusts. A species' records are those whose name WFO resolves
+# to it, synonyms included.
 #
 #     julia --project -t auto data/src/species_widths.jl [--force]
 #
@@ -57,20 +58,21 @@ end
 """
     width_table(records)
 
-Group `records`, which carry `species`, the flags `on_lattice`, `near_garden` and `garden_named`,
-and the window summaries `tmin` and `tp`, by species name, and return one row per name: `species,
-tmin_n, tmin_sd, tp_n, tp_sd`. A name is the unit the published envelopes are keyed on, so records
-GBIF files under several keys of one name are pooled. Temperature widths leave out records on the
-lattice; precipitation widths also leave out records near or naming a garden.
+Group `records`, which carry `wfo_species` and `wfo_id`, the flags `on_lattice`, `near_garden` and
+`garden_named`, and the window summaries `tmin` and `tp`, by WFO species, and return one row per
+species: `species`, its WFO name, `wfo_id`, `tmin_n`, `tmin_sd`, `tp_n` and `tp_sd`. Temperature
+widths leave out records on the lattice; precipitation widths also leave out records near or naming
+a garden.
 """
 function width_table(records::DataFrame)
-    grouped = groupby(records, :species)
+    grouped = groupby(records, [:wfo_species, :wfo_id])
     table = combine(grouped) do g
         temperature = _width(g.tmin, .!g.on_lattice)
         rain = _width(g.tp, .!(g.on_lattice .| g.near_garden .| g.garden_named))
         return (tmin_n = temperature.n, tmin_sd = temperature.sd,
                 tp_n = rain.n, tp_sd = rain.sd)
     end
+    rename!(table, :wfo_species => :species)
     return sort!(table, :species)
 end
 
@@ -82,8 +84,8 @@ function main(argv)
         return nothing
     end
     records = CSV.read(joinpath(datadir(), "records_africa.csv"), DataFrame)
-    filter!(r -> !ismissing(r.species), records)
-    println("Read ", nrow(records), " named records")
+    filter!(r -> !ismissing(r.wfo_species), records)
+    println("Read ", nrow(records), " records of a WFO species")
     flush(stdout)
     era5 = joinpath(datadir(), "era5")
     windows = record_windows(records, load_stack(era5, "t2m"),
@@ -93,7 +95,7 @@ function main(argv)
     table = width_table(records)
     CSV.write(out, table)
     write_sidecar(out,
-                  source = "records_africa.csv joined to ERA5 monthly means",
+                  source = "records_africa.csv joined to ERA5 monthly means, grouped by wfo_species",
                   species = nrow(table),
                   records_with_temperature = count(!isnan, windows.tmin),
                   records_with_precipitation = count(!isnan, windows.tp),

@@ -82,9 +82,10 @@ using EcoSISTEM.Provenancer: SourceFacts, DepositCitedApart, GeneratedOnRequest,
                              record_provenance, writesidecar
 
 # Write a small ERA5-shaped file: `variable` over a 3 x 4 lattice for `months` consecutive months
-# from January `year0`, valued `base + t` in month t at every cell, with the CDS's own axis names
-# and a `units` attribute; `NaN` in the north-west corner throughout to stand for the sea.
-function fake_era5(path, variable, units, year0, months; base = 0.0)
+# from January `year0`, each stamped at `hour`, valued `base + t` in month t at every cell, with the
+# CDS's own axis names and a `units` attribute; `NaN` in the north-west corner throughout to stand
+# for the sea.
+function fake_era5(path, variable, units, year0, months; base = 0.0, hour = 0)
     NCDataset(path, "c") do ds
         defDim(ds, "valid_time", months)
         defDim(ds, "latitude", 3)
@@ -94,7 +95,7 @@ function fake_era5(path, variable, units, year0, months; base = 0.0)
                        "units" => "days since 1900-01-01",
                        "calendar" => "proleptic_gregorian"
                    ])
-        dates = [DateTime(year0, 1, 1) + Month(k - 1) for k in 1:months]
+        dates = [DateTime(year0, 1, 1, hour) + Month(k - 1) for k in 1:months]
         t[:] = Dates.value.(dates .- DateTime(1900, 1, 1)) ./ 86_400_000
         defVar(ds, "latitude", Float64, ("latitude",))[:] = [10.0, 9.75, 9.5]
         defVar(ds, "longitude", Float64, ("longitude",))[:] = [
@@ -119,7 +120,7 @@ end
     @test ERA5Download.last_complete_year(Dates.Date(2026, 9, 11)) == 2025
     @test ERA5Download.cdsarea() == (40, -25, -36, 56)
     dir = mktempdir()
-    requests = ERA5Download.requests(dir, lastyear = 2025)
+    requests = ERA5Download.requests(dir, through = Dates.Date(2025, 12))
     @test length(requests) == length(ERA5Download.CODES) == 4
     @test [basename(r.path) for r in requests[1]] ==
           [["era5_t2m_$(d)s_40N25W36S56E.nc" for d in 1940:10:2010]
@@ -138,6 +139,23 @@ end
     dry = EcoSISTEM.fetchfiles(specs, dryrun = true)
     @test length(dry) == 4 * 9
     @test count(e -> e.present, dry) == 1
+    # A series stopping before December takes that year's months in a file of their own.
+    partial = ERA5Download.requests(dir, through = Dates.Date(2026, 8))[1]
+    @test length(partial) == 10
+    @test basename(partial[end].path) ==
+          "era5_t2m_2026-2026_40N25W36S56E_m01-08.nc"
+    @test partial[end].request["year"] == ["2026"]
+    @test length(partial[end].request["month"]) == 8
+    @test ERA5Download._through(["--through=2026-08"]) == Dates.Date(2026, 8)
+    @test ERA5Download._through(String[]) ==
+          Dates.Date(ERA5Download.last_complete_year(), 12)
+    # Each month's `expver` says whether it is final; a file without one has no preliminary months.
+    path = fake_era5(joinpath(dir, "late.nc"), "t2m", "K", 2026, 3)
+    @test isempty(ERA5Download.preliminary_months(path))
+    NCDataset(path, "a") do ds
+        return defVar(ds, "expver", ["0001", "0001", "0005"], ("valid_time",))
+    end
+    @test ERA5Download.preliminary_months(path) == [Dates.Date(2026, 3)]
 end
 
 @testset "Data scripts: 20CRv3 request" begin
@@ -498,6 +516,23 @@ end
     climate = SpeciesTraits.record_climate(records, stacks)
     @test climate.tmin ≈ [283.0, 271.0, 277.0, NaN] nans = true
     @test climate.tp ≈ [mean(13:24), mean(1:12), mean(7:18), NaN] nans = true
+
+    # Widths are over the records of each WFO species: temperature leaves out a record on the
+    # lattice, and precipitation also one near a garden. One record gives no width.
+    rows = DataFrame(wfo_species = ["A a", "A a", "A a", "A a", "B b"],
+                     wfo_id = ["wfo-1", "wfo-1", "wfo-1", "wfo-1", "wfo-2"],
+                     on_lattice = [false, false, false, true, false],
+                     near_garden = [false, false, true, false, false],
+                     garden_named = falses(5),
+                     tmin = [270.0, 272.0, 274.0, 290.0, 280.0],
+                     tp = [0.001, 0.003, 0.009, 0.009, 0.002])
+    widths = SpeciesWidths.width_table(rows)
+    @test widths.species == ["A a", "B b"]
+    @test widths.wfo_id == ["wfo-1", "wfo-2"]
+    @test widths.tmin_n == [3, 1] && widths.tp_n == [2, 1]
+    @test widths.tmin_sd[1] ≈ std([270.0, 272.0, 274.0])
+    @test widths.tp_sd[1] ≈ std([0.001, 0.003])
+    @test ismissing(widths.tmin_sd[2]) && ismissing(widths.tp_sd[2])
     table = SpeciesTraits.species_table(climate)
     @test nrow(table) == 1            # B has one record with climate, below the minimum
     @test table.species == ["A a"]
@@ -641,21 +676,22 @@ end
                           tmin = [280.0, 284.0, 290.0, 300.0, 295.0],
                           tp = [0.001, 0.002, 0.002, 0.003, 0.002],
                           ssr = [1.0e7, 2.0e7, 1.5e7, 2.0e7, 1.0e7])
-    widths = DataFrame(species = ["A a", "B b", "B y", "C c", "D d", "Z z"],
-                       tmin_n = [2, 100, 20, 1, 50, 3],
-                       tmin_sd = [1.0, 3.0, 6.0, missing, 2.0, 1.0],
-                       tp_n = [2, 100, 20, 40, 50, 3],
-                       tp_sd = [0.0, 0.002, 0.004, 0.001, 0.001, 0.001])
+    # The widths are one row per WFO species, as `species_widths.jl` writes them.
+    widths = DataFrame(species = ["A a", "B b", "C c", "D d"],
+                       tmin_n = [2, 120, 1, 50],
+                       tmin_sd = [1.0, 3.5, missing, 2.0],
+                       tp_n = [2, 120, 40, 50],
+                       tp_sd = [0.0, 0.0025, 0.001, 0.001])
     withfakewfo() do zip
         wfo = WFOPlantList(release = WFO_RELEASE, prefer_accepted = true,
                            path = zip)
         built = species_pool(envelopes, widths, authority = wfo,
                              verbosity = :silent)
         pool = built.pool
-        # E was never recorded in Africa and goes; D has records and no envelope, and Z a name WFO
-        # does not hold, so neither is a species of the pool.
+        # E was never recorded in Africa and goes; D has records and no envelope, so is no species of
+        # the pool.
         @test sort(pool.species.name) == ["A a", "B b", "C c"]
-        @test built.unmatched == ["D d", "Z z"]
+        @test built.unmatched == ["D d"]
         # C has one record of temperature and so no width of its own there, and is kept on the prior.
         @test built.nowidth == ["C c"]
         row(name) = pool.species[only(findall(==(name), pool.species.name)), :]
@@ -664,10 +700,13 @@ end
         @test row("A a").tmin ≈ (10 * 280.0 + 30 * 284.0) / 40
         @test row("A a").tp ≈ (10 * 0.001 + 30 * 0.002) / 40
         @test row("A a").ssr ≈ (10 * 1.0e7 + 30 * 2.0e7) / 40
-        # "B y" is a synonym of "B b": its records join B's, the widths pooled by their records.
-        @test row("B b").tmin_n == 120
-        @test row("B b").tmin_sd ≈ sqrt((100 * 3.0^2 + 20 * 6.0^2) / 120)
-        @test row("B b").tp_sd ≈ sqrt((100 * 0.002^2 + 20 * 0.004^2) / 120)
+        # A width row under a synonym of a species with a row of its own is refused, not merged.
+        synonym = DataFrame(species = "B y", tmin_n = 20, tmin_sd = 6.0,
+                            tp_n = 20, tp_sd = 0.004)
+        @test_throws ErrorException species_pool(envelopes,
+                                                 vcat(widths, synonym),
+                                                 authority = wfo,
+                                                 verbosity = :silent)
         @test (row("A a").genus, row("A a").family, row("A a").order) ==
               ("A", "Familia", "Ordo")
         # No group holds five well-recorded species, so the prior is the median over the well
@@ -687,10 +726,13 @@ end
                                 verbosity = :silent).pool.species
         @test unshrunk.tmin_width[unshrunk.name .== "A a"] ≈ [1.0]
 
-        # Records named by any name of a species find it, and a name of no species of the pool none.
-        @test isequal(accepted_names(pool,
-                                     ["B y", "A a", "D d", "Z z", missing]),
-                      ["B b", "A a", missing, missing, missing])
+        # A record's name gives the species it means to WFO, a synonym its accepted name; a name
+        # WFO does not hold, or none, gives none.
+        named = SpeciesTraits.wfo_species(["B y", "A a", "Z z", missing],
+                                          authority = wfo)
+        @test isequal(named.species, ["B b", "A a", missing, missing])
+        @test isequal(named.id,
+                      ["wfo-0000000003", "wfo-0000000001", missing, missing])
 
         species = africa_species(pool, density = 4.0 / m^2, seed = 3,
                                  verbosity = :silent)
@@ -745,6 +787,21 @@ end
 end
 
 @testset "Climate timing" begin
+    # A backwards run starts at the month every variable it reads ends in, the last file's. An
+    # accumulated variable's months are stamped at 06:00, which is the same month.
+    dir = mktempdir()
+    for (code, hour) in (("t2m", 0), ("tp", 6), ("ssr", 6))
+        fake_era5(joinpath(dir, "era5_$(code)_1940s.nc"), code, "x", 1940, 12,
+                  hour = hour)
+        fake_era5(joinpath(dir, "era5_$(code)_1941_m01-08.nc"), code, "x",
+                  1941, 8, hour = hour)
+    end
+    @test era5_last_month(dir) == (year = 1941, month = 8)
+    rm(joinpath(dir, "era5_tp_1941_m01-08.nc"))
+    @test_throws ErrorException era5_last_month(dir)
+    @test era5_last_month(dir, codes = ("t2m", "ssr")) ==
+          (year = 1941, month = 8)
+
     # A two-year monthly stack whose value is its month's ordinal, on real month starts.
     dates = [DateTime(1940, 1, 1) + Month(k - 1) for k in 1:24]
     values = reshape(repeat(1.0:24.0, inner = 4), 2, 2, 24) .* K
@@ -838,7 +895,8 @@ end
                                               1.0m^2)
 
     # A record in the burn-in's first month is at elapsed zero; one after it is before the run.
-    @test months_back([2025, 2026, 1940], [12, 1, 1]) == [0, -1, 1031]
+    @test months_back([2025, 2026, 1940], [12, 1, 1],
+                      start = (year = 2025, month = 12)) == [0, -1, 1031]
     # Without a floor the factors are the scale's own shares, and a cell with no EVI seeds nothing.
     raw = seeding_factors(c, evi, fraction, area, records, floor = 0.0)
     @test raw[1, 1] ≈ 1.0e6 && raw[2, 1] == 0.0 && isnan(raw[2, 2])

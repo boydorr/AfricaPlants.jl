@@ -81,23 +81,6 @@ function merge_envelopes(rows)
 end
 
 """
-    merge_widths(rows)
-
-Return the widths of a species that several of the records' names mean, as a named tuple: the
-records each width rests on counted together (`tmin_n`, `tp_n`), and each width (`tmin_sd`,
-`tp_sd`) the root mean square of the names' widths weighted by their records. The spread between the
-names' own means is not in it, so it is no wider than the widest name's.
-
-  - `rows`: the widths' rows the names have, with `tmin_n`, `tmin_sd`, `tp_n` and `tp_sd`.
-"""
-function merge_widths(rows)
-    pooled(sd, n) = (w = _weightedmean(sd .^ 2, n); ismissing(w) ? w : sqrt(w))
-    return (tmin_n = sum(rows.tmin_n),
-            tmin_sd = pooled(rows.tmin_sd, rows.tmin_n),
-            tp_n = sum(rows.tp_n), tp_sd = pooled(rows.tp_sd, rows.tp_n))
-end
-
-"""
     shrink_width(width, n, prior, strength)
 
 Return the `width` across `n` records shrunk towards `prior`, which carries the weight of `strength`
@@ -158,13 +141,14 @@ end
                  provenance = EcoSISTEM.ProvenanceRecord[], verbosity = :normal)
 
 Return the species a run simulates, as a named tuple of `pool`, a `SpeciesPool` of every species the
-envelopes give a niche and the records found in Africa; `unmatched`, the records' names that mean no
-species of the pool, which are left out; and `nowidth`, the species whose records give no width of
-their own on one of the two tolerance axes, which are kept on their relatives' width.
+envelopes give a niche and the records found in Africa; `unmatched`, the species of the widths that
+have no envelope, which are left out; and `nowidth`, the species whose records give no width of their
+own on one of the two tolerance axes, which are kept on their relatives' width.
 
 Both tables' names are standardised through `authority`, so a species the envelopes and the records
-name differently is one species, under its accepted name; several envelope rows meaning one species
-are merged by [`merge_envelopes`](@ref), several width rows by [`merge_widths`](@ref). Each species
+name differently is one species, under its accepted name. Several envelope rows meaning one species
+are merged by [`merge_envelopes`](@ref). The widths are already one row per species of `authority`,
+since `data/src/species_widths.jl` groups the records by the species their names mean. Each species
 holds the envelope's `tmin` (K), `tp` (m/day) and `ssr` (J m^-2 per day), its records' widths
 `tmin_sd` and `tp_sd` with the records each rests on, `tmin_n` and `tp_n`, its `genus`, `family` and
 `order` as the authority classifies it, and the widths [`africa_species`](@ref) takes, `tmin_width`
@@ -178,8 +162,8 @@ as it stands.
 
   - `envelopes`: the published envelopes, with `species`, `numrecords`, `tmin`, `tp` (m/day) and
     `ssr`.
-  - `widths`: the widths across each name's records, with `species`, `tmin_sd` (K) and `tp_sd`
-    (m/day), `missing` where a name has too few records, and the records each rests on, `tmin_n`
+  - `widths`: the widths across each species' records, with `species`, `tmin_sd` (K) and `tp_sd`
+    (m/day), `missing` where a species has too few records, and the records each rests on, `tmin_n`
     and `tp_n`.
   - `strength`: how many records' weight the relatives' width carries against a species' own.
   - `authority`: the name authority both tables' names are standardised through, by default
@@ -196,7 +180,7 @@ function species_pool(envelopes::DataFrame, widths::DataFrame;
                        merge = MergeWith(merge_envelopes),
                        provenance = provenance, verbosity = verbosity)
     add_trait!(pool, select(widths, :species, :tmin_n, :tmin_sd, :tp_n, :tp_sd),
-               merge = MergeWith(merge_widths), verbosity = verbosity)
+               verbosity = verbosity)
     # A species with no row among the widths was never recorded in Africa.
     remove_species!(pool, verbosity = verbosity) do row
         return ismissing(row.tmin_n)
@@ -220,14 +204,7 @@ function species_pool(envelopes::DataFrame, widths::DataFrame;
     end
     table = pool.species
     nowidth = sort(table.name[ismissing.(table.tmin_sd) .| ismissing.(table.tp_sd)])
-    simulated = Set(table.name)
-    matched = name_table(pool)
-    recorded = Set(widths.species)
-    unmatched = sort(unique(row.name
-                            for row in eachrow(matched)
-                            if row.name in recorded &&
-                         (ismissing(row.species) ||
-                          !(row.species in simulated))))
+    unmatched = sort(setdiff(widths.species, table.name))
     return (pool = pool, unmatched = unmatched, nowidth = nowidth)
 end
 
@@ -258,29 +235,6 @@ function scaled_pool(pool::SpeciesPool)
         return !(row.name in chosen)
     end
     return pool
-end
-
-"""
-    accepted_names(pool, names)
-
-Return the name of the species of `pool` each of `names` means, through the pool's name authority,
-or `missing` for a name that means none of them: how occurrence records, named by their own
-checklist, are matched to the species a run simulates.
-
-  - `pool`: the species, a `SpeciesPool` with a name authority.
-  - `names`: the names, `missing` allowed.
-"""
-function accepted_names(pool::SpeciesPool, names::AbstractVector)
-    simulated = Set(pool.species.name)
-    found = Dict{String, Union{Missing, String}}()
-    return map(names) do name
-        ismissing(name) && return missing
-        return get!(found, name) do
-            means = EcoSISTEM.resolve_name(pool.authority, name)
-            return isnothing(means.name) || !(means.name in simulated) ?
-                   missing : means.name
-        end
-    end
 end
 
 """

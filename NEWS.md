@@ -31,8 +31,16 @@
     - A run in one process measures its yearly diversity on one snapshot of the landscape, holding
       one normalised copy of the abundances instead of one per measure; the values are unchanged.
     - Species carry their accepted name in the WFO Plant List (`WFO_RELEASE`). Envelope rows naming
-      one species are merged, weighted by their records, and `accepted_names` renames the seeding
-      records to match. `species_pool` returns an EcoSISTEM `SpeciesPool`.
+      one species are merged, weighted by their records. `species_pool` returns an EcoSISTEM
+      `SpeciesPool`.
+    - The seeding records carry the WFO species their name means (`wfo_species`, `wfo_id`), and the
+      niche widths are computed per WFO species, pooling the records of its synonyms.
+    - ERA5 runs to the last month of final data (August 2026): `data/src/era5_download.jl
+      --through=2026-08` fetches a year's months so far and refuses preliminary ERA5T months.
+    - The backwards burn-in starts at the climate's last month (`era5_last_month`). A record made
+      after it counts in the starting shares and is no longer added on top. The forward run and the
+      control still run from 1940 to 2025. `burnin_table`, `seeding_rows` and `months_back` take
+      `start` with no default.
     - A species draws its mean dispersal distance from its own random stream, so the distance does
       not depend on the other species in the pool. Seeds now reach neighbouring cells as the kernel
       says, since EcoSISTEM 0.11.1 corrects a lookup that sent too few or none across cells tens of

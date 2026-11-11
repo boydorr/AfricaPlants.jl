@@ -48,9 +48,11 @@ function recorded_richness(cells::Integer)
     widths = CSV.read(joinpath(DATA, "species_widths.csv"), DataFrame)
     pool = species_pool(envelopes, widths).pool
     records = CSV.read(joinpath(DATA, "records_africa.csv"), DataFrame,
-                       select = [:species, :decimalLatitude, :decimalLongitude])
-    records.species = accepted_names(pool, records.species)
-    filter!(r -> !ismissing(r.species), records)
+                       select = [:wfo_species, :decimalLatitude,
+                           :decimalLongitude])
+    rename!(records, :wfo_species => :species)
+    simulated = Set(pool.species.name)
+    filter!(r -> !ismissing(r.species) && r.species in simulated, records)
     positioning = positioning_layers()
     chosen = choose_cellsize(length(pool), regime = positioning.regime,
                              supply = positioning.supply)

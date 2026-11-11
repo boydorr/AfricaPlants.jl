@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 #
 # From cleaned GBIF records, the Africa records the model seeds from: every record of `records.csv`
-# inside Africa's outline, with the flag columns cleaning wrote.
+# inside Africa's outline, with the flag columns cleaning wrote and the species its name means in the
+# WFO Plant List, `wfo_species` and `wfo_id`, as the run's species pool resolves names.
 #
 #     julia --project data/src/species_traits.jl [--force]
 #
@@ -244,6 +245,24 @@ function in_africa(records::DataFrame)
                       for cell in EcoSISTEM.getcellat(environment, places)])
 end
 
+# --- the names --------------------------------------------------------------------------
+
+"""
+    wfo_species(names; authority = wfo_authority())
+
+Return the species each of `names` means to `authority`, as the run's species pool resolves names:
+a named tuple of `species`, the name WFO gives it, and `id`, its WFO identifier, one of each per
+name. Both are `missing` for a `missing` name or one WFO does not recognise.
+"""
+function wfo_species(names::AbstractVector; authority = wfo_authority())
+    resolved = Dict(name => EcoSISTEM.resolve_name(authority, name)
+                    for name in unique(skipmissing(names)))
+    pick(name, field) = ismissing(name) ? missing :
+                        something(getproperty(resolved[name], field), missing)
+    return (species = [pick(name, :name) for name in names],
+            id = [pick(name, :id) for name in names])
+end
+
 # --- the script ----------------------------------------------------------------------
 
 function main(argv)
@@ -256,10 +275,16 @@ function main(argv)
     records = CSV.read(joinpath(datadir(), "records.csv"), DataFrame)
     println("Read ", nrow(records), " records")
     africa = records[in_africa(records), :]
+    named = wfo_species(africa.species)
+    africa.wfo_species = named.species
+    africa.wfo_id = named.id
     CSV.write(out, africa)
     write_sidecar(out, source = "records.csv within Natural Earth Africa",
+                  names = "GBIF's species resolved by the WFO Plant List $(WFO_RELEASE)",
                   records = nrow(africa),
                   species = length(unique(africa.speciesKey)),
+                  records_with_wfo_species = count(!ismissing, named.species),
+                  wfo_species = length(unique(skipmissing(named.species))),
                   flagged_on_lattice = count(africa.on_lattice),
                   flagged_near_garden = count(africa.near_garden),
                   flagged_garden_named = count(africa.garden_named))

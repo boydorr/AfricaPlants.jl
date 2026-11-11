@@ -62,7 +62,9 @@ const DISTRIBUTED = let want = get(ENV, "AFRICA_DISTRIBUTED", "auto")
 end
 const SAVEDIR = mkpath(get(ENV, "AFRICA_SAVEDIR",
                            joinpath(pwd(), "Africa_run")))
-const MONTHS = smallscale() ? 6 : 12 * (2025 - 1940 + 1)
+# The backwards run starts at the last month of the climate and runs back to January 1940.
+const START = era5_last_month()
+const MONTHS = smallscale() ? 6 : 12 * (START.year - 1940) + START.month
 const HELD = smallscale() ? 1 : parse(Int, get(ENV, "AFRICA_HELD", "10"))
 
 # Where each stage's yearly record of the whole landscape goes: individuals, species and every
@@ -82,8 +84,8 @@ function report(where, recorded, elapsed)
                " at q = ", join(DIVERSITY_ORDERS, ", "))
 end
 
-# The species, under WFO's accepted names, and their records matched to them. A small run keeps
-# the most-recorded species.
+# The species, under WFO's accepted names, and their records, each carrying the WFO species its name
+# means. A small run keeps the most-recorded species.
 envelopes = CSV.read(ENVELOPES, DataFrame,
                      select = [:species, :numrecords, :tmin, :tp, :ssr])
 widths = CSV.read(joinpath(DATA, "species_widths.csv"), DataFrame)
@@ -92,12 +94,13 @@ built = species_pool(envelopes, widths,
                      verbosity = ISROOT ? :normal : :silent)
 pool = scaled_pool(built.pool)
 records = CSV.read(joinpath(DATA, "records_africa.csv"), DataFrame,
-                   select = [:species, :decimalLatitude, :decimalLongitude,
+                   select = [:wfo_species, :decimalLatitude, :decimalLongitude,
                        :year, :month])
-records.species = accepted_names(pool, records.species)
-filter!(r -> !ismissing(r.species), records)
+rename!(records, :wfo_species => :species)
+simulated = Set(pool.species.name)
+filter!(r -> !ismissing(r.species) && r.species in simulated, records)
 say(length(pool), " species (", length(built.unmatched),
-    " record names with no envelope left out, ", length(built.nowidth),
+    " recorded species with no envelope left out, ", length(built.nowidth),
     " on their relatives' width alone), ", nrow(records), " records")
 
 species = africa_species(pool, seed = SPECIES_SEED,
@@ -116,11 +119,13 @@ say("grid ", chosen.cellsize)
 eco = africa_ecosystem(species, area, ReversedClimate(), seed = SEED,
                        distributed = DISTRIBUTED)
 seeding = burnin_table(eco, records,
-                       read_seeding_grid(joinpath(DATA, "seeding_grid.nc")))
+                       read_seeding_grid(joinpath(DATA, "seeding_grid.nc")),
+                       start = START)
 say("seeding: c = ", seeding.c, ", continental scale ", seeding.scale, "; ",
     seeding.used, " records used, ", seeding.inactive, " in no active cell; ",
     seeding.started, " individuals to start, ", seeding.added,
-    " added over the burn-in, ", seeding.extra, " from records after it")
+    " added over the burn-in; ", seeding.later, " records after ",
+    START.year, "-", lpad(START.month, 2, '0'), " in the start alone")
 # Seeded as `run_burnin!` does, but through `simulate!` directly so that a run of many hours reports
 # each decade it passes; the callback only prints, which is safe on every MPI rank.
 seeding_rows = Intervention(EveryStep(), ActiveCells(),
