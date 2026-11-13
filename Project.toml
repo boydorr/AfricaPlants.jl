@@ -51,6 +51,7 @@ RasterDataSources = "0.6, 0.7"
 Rasters = "0.15"
 SHA = "0.7, 1"
 SparseArrays = "1"
+Statistics = "1.11"
 Unitful = "1.12"
 julia = "1.11"
 
