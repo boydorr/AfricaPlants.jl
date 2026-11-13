@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  # The package's compat, and the paper environment's, which holds the compat of what only it uses
+  - package-ecosystem: "julia"
+    directories:
+      - "/"
+      - "/examples/paper"
+    schedule:
+      interval: "weekly"
+    # groups: # uncomment to group all julia package updates into a single PR
+    #   all-julia-packages:
+    #     patterns:
+    #       - "*"

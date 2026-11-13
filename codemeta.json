@@ -14,10 +14,10 @@
         "Windows",
         "macOS"
     ],
-    "version": "v0.3.0",
+    "version": "v0.3.1",
     "dateModified": "2026-11-13",
     "datePublished": "2023-09-04",
-    "downloadUrl": "https://github.com/boydorr/AfricaPlants.jl/archive/refs/tags/v0.3.0.tar.gz",
+    "downloadUrl": "https://github.com/boydorr/AfricaPlants.jl/archive/refs/tags/v0.3.1.tar.gz",
     "license": "https://spdx.org/licenses/LGPL-3.0-or-later",
     "author": [
         {

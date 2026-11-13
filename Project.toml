@@ -1,7 +1,7 @@
 name = "AfricaPlants"
 uuid = "6119f539-958e-4989-9c66-2e1931f65b8f"
 license = "LGPL-3.0-or-later"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Claire Harris", "Richard Reeve <richard.reeve@glasgow.ac.uk>"]
 
 [deps]

@@ -1,6 +1,6 @@
 # NEWS
 
-- Unreleased
+- v0.3.1
   - Changed
     - Nothing in `data/` is tracked but its scripts. Each provenance record there is written with its file,
       and a pipeline run registers both. MARS takes the two records its runs read of inputs it lacks, the

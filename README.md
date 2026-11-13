@@ -1,5 +1,8 @@
 # AfricaPlants
 
+[![CI](https://github.com/boydorr/AfricaPlants.jl/actions/workflows/testing.yaml/badge.svg?branch=main)](https://github.com/boydorr/AfricaPlants.jl/actions/workflows/testing.yaml)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24183323.svg)](https://doi.org/10.5281/zenodo.24183323)
+
 The code behind the second case study of the [EcoSISTEM paper](https://arxiv.org/abs/1911.12257),
 *"EcoSISTEM: simulating species-rich plant biodiversity over large scales in Julia"* (Harris, Brummitt,
 Cobbold and Reeve). It simulates the plant species recorded in Africa, about 45,800 of them, competing for
