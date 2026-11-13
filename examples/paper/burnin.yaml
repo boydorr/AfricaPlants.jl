@@ -16,6 +16,45 @@ register:
   full_name: AfricaPlants
   website: https://github.com/boydorr/AfricaPlants.jl
 
+# Each source's files and records in its own namespace, and each table of ours in this one.
+read:
+- data_product: CaseStudy/Data/RecordsAfrica/data/*
+- data_product: CaseStudy/Data/RecordsAfrica/provenance/*
+- data_product: CaseStudy/Data/SpeciesWidths/data/*
+- data_product: CaseStudy/Data/SpeciesWidths/provenance/*
+- data_product: CaseStudy/Data/EVIReliable/data/*
+- data_product: CaseStudy/Data/EVIReliable/provenance/*
+- data_product: era5/data/*
+  use:
+    namespace: ECMWF
+- data_product: era5/provenance/*
+  use:
+    namespace: ECMWF
+- data_product: earthenv/data/*
+  use:
+    namespace: EarthEnv
+- data_product: earthenv/provenance/*
+  use:
+    namespace: EarthEnv
+- data_product: naturalearth/data/*
+  use:
+    namespace: NaturalEarth
+- data_product: naturalearth/provenance/*
+  use:
+    namespace: NaturalEarth
+- data_product: wfo/data/*
+  use:
+    namespace: WFO
+- data_product: wfo/provenance/*
+  use:
+    namespace: WFO
+- data_product: envelopes/data/*
+  use:
+    namespace: EIDC
+- data_product: envelopes/provenance/*
+  use:
+    namespace: EIDC
+
 # A `*` matches part or all of one segment of a name, so each entry is one output of every grid and
 # seed, with its own file type.
 write:
@@ -25,13 +64,22 @@ write:
 - data_product: CaseStudy/*/Burnin/Totals_*
   description: Each species' and each cell's individuals in each year of a burn-in
   file_type: jld2
+- data_product: CaseStudy/*/Burnin/Recorded_*
+  description: The species placed in each cell of the grid by the burn-in's seeding records
+  file_type: csv
+- data_product: CaseStudy/*/Burnin/Provenance_*
+  description: Everything the burn-in was built from, the state it ends in written beside it
+  file_type: toml
 - data_product: CaseStudy/*/Hold/Diversity_*
-  description: The individuals, species and diversity of the whole landscape in each year the first year's climate is held
+  description: The individuals, species and diversity of the whole landscape in each year the 1941-1950 average year is held
   file_type: csv
 - data_product: CaseStudy/*/Hold/Totals_*
-  description: Each species' and each cell's individuals in each year the first year's climate is held
+  description: Each species' and each cell's individuals in each year the 1941-1950 average year is held
   file_type: jld2
 - data_product: CaseStudy/*/Hold/State_*
   description: The settled state, every species' individuals in every cell, that the forward run and the control start from
   file_type: jld2
   public: false
+- data_product: CaseStudy/*/Hold/Provenance_*
+  description: Everything the settled state was built from
+  file_type: toml

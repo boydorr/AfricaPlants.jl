@@ -18,6 +18,9 @@
 # final ERA5 is wanted: the CDS serves its latest two or three months as preliminary ERA5T, marked
 # by each month's `expver`, and the script refuses a file holding any such month. Name an earlier
 # month and delete the file.
+#
+# Launched by `fair run` from `fetch-era5.yaml`, which names the month, it also registers every file
+# and its record under `era5`, once each is fetched and checked.
 
 module ERA5Download
 
@@ -99,23 +102,29 @@ end
 function main(argv)
     dir = joinpath(datadir(), "era5")
     mkpath(dir)
-    specs = [SourceSpec(ERA, code, files = files)
-             for (code, files) in zip(CODES,
-                                      requests(dir, through = _through(argv)))]
+    wanted = requests(dir, through = _through(argv))
+    specs(handle) = [SourceSpec(ERA, code, files = files,
+                                track = AfricaPlants.source_track(handle,
+                                                                  :era5))
+                     for (code, files) in zip(CODES, wanted)]
     if "--dry-run" in argv
-        for entry in EcoSISTEM.fetchfiles(specs, dryrun = true)
+        for entry in EcoSISTEM.fetchfiles(specs(nothing), dryrun = true)
             println(entry.present ? "  have   " : "  fetch  ",
                     basename(entry.entry.path))
         end
         return nothing
     end
-    paths = EcoSISTEM.fetchfiles(specs)
+    # Fetched and checked untracked, so that no preliminary month is ever registered.
+    paths = EcoSISTEM.fetchfiles(specs(nothing))
     println(length(paths), " file(s) in ", dir)
     late = [basename(p) * " " * Dates.format(m, "yyyy-mm")
             for p in paths for m in preliminary_months(p)]
     isempty(late) ||
         error("preliminary ERA5T months fetched: ", join(late, ", "),
               ". Name an earlier month with --through and delete these files.")
+    pipeline_run(todo = handle -> EcoSISTEM.missingfiles(specs(handle))) do handle
+        return isnothing(handle) || EcoSISTEM.fetchfiles(specs(handle))
+    end
     return nothing
 end
 

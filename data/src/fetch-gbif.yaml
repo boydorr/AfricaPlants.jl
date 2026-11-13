@@ -1,0 +1,31 @@
+# The GBIF occurrence download of plant records over the Africa box from 1940, fetched and
+# registered: the source's deposit is the run's one input, and its outputs are the files and
+# EcoSISTEM's provenance record of each. From the root of the repository:
+#
+#     fair run data/src/fetch-gbif.yaml
+#
+# Run again with everything registered, the script stops before a code run exists.
+#
+# The download is cleaned into the seeding records; the earlier one, 1806 to 1939, is used by no
+# run.
+run_metadata:
+  description: The GBIF occurrence download of plant records over the Africa box from 1940, fetched and registered
+  default_input_namespace: GBIF
+  default_output_namespace: GBIF
+  script: |
+    julia --project data/src/gbif_download.jl era5
+
+# The source's namespace, which is the run's own.
+register:
+- namespace: GBIF
+  full_name: Global Biodiversity Information Facility
+  website: https://www.gbif.org/
+
+write:
+- data_product: gbif/data/*
+  description: A GBIF occurrence download, as the CSV unpacked from it
+  file_type: csv
+  public: false
+- data_product: gbif/provenance/*
+  description: EcoSISTEM's provenance record of a file under gbif
+  file_type: toml

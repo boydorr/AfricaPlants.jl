@@ -1,0 +1,28 @@
+# The paper's figures as a data pipeline run, drawn from every replicate of the case study the registry
+# holds on one grid; see `pipeline.jl`. From the root of the repository, with `AFRICA_SCALE` or
+# `AFRICA_CELLSIZE` naming the grid, and `AFRICA_SEED` the replicate the time series draws:
+#
+#     fair pull --local examples/paper/figures.yaml && fair run examples/paper/figures.yaml
+run_metadata:
+  description: The figures of AfricaPlants' case study, drawn from every replicate of its forward runs and controls on one grid
+  default_input_namespace: AfricaPlants
+  default_output_namespace: AfricaPlants
+  script: |
+    julia --project=examples/paper examples/paper/pipeline.jl figures
+
+register:
+- namespace: AfricaPlants
+  full_name: AfricaPlants
+  website: https://github.com/boydorr/AfricaPlants.jl
+
+read:
+- data_product: CaseStudy/*/Forward/Cells_*
+- data_product: CaseStudy/*/Forward/Diversity_*
+- data_product: CaseStudy/*/Neutral/Cells_*
+- data_product: CaseStudy/*/Neutral/Diversity_*
+- data_product: CaseStudy/*/Burnin/Recorded_*
+
+write:
+- data_product: CaseStudy/*/Figures/*
+  description: A figure of AfricaPlants' case study
+  file_type: pdf

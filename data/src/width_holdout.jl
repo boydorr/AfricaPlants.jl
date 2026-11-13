@@ -30,11 +30,13 @@ using Random
 using Statistics
 
 using AfricaPlants: PRIOR_MEMBERS, PRIOR_RECORDS, shrink_width, species_pool,
-                    width_priors
+                    width_priors, envelopes_record, wfo_authority,
+                    provide_files, table_record
 
 include("species_widths.jl")
 using .SpeciesWidths: record_windows
-using .SpeciesWidths.SpeciesTraits: load_stack, datadir, write_sidecar
+using .SpeciesWidths.SpeciesTraits: load_stack, datadir, write_sidecar,
+                                    record_table, pipeline_run
 
 # A species' width is taken as known from this many records.
 const KNOWN_RECORDS = 100
@@ -153,7 +155,21 @@ function holdout(values::Vector{Float64}, lat::Vector{Float64},
 end
 
 function main()
-    records = CSV.read(joinpath(datadir(), "records_africa.csv"), DataFrame,
+    return pipeline_run() do handle
+        return scores(handle)
+    end
+end
+
+# The hold-out experiment's scores, written to `width_holdout.csv`: the Africa records, the widths,
+# ERA5, the envelopes and the WFO release read through the data pipeline run `handle` where there is
+# one, and the scores registered with it.
+function scores(handle)
+    input = joinpath(datadir(), "records_africa.csv")
+    table_record(input, :records_africa, handle = handle)
+    widthfile = joinpath(datadir(), "species_widths.csv")
+    table_record(widthfile, :species_widths, handle = handle)
+    envelopes_record(ENVELOPES, handle = handle)
+    records = CSV.read(input, DataFrame,
                        select = [:wfo_species, :decimalLatitude,
                            :decimalLongitude, :year, :month, :on_lattice,
                            :near_garden, :garden_named])
@@ -163,11 +179,13 @@ function main()
     # The species the runs simulate, each with WFO's genus, family and order.
     envelopes = CSV.read(ENVELOPES, DataFrame,
                          select = [:species, :numrecords, :tmin, :tp, :ssr])
-    widths = CSV.read(joinpath(datadir(), "species_widths.csv"), DataFrame)
-    pool = species_pool(envelopes, widths, verbosity = :silent).pool.species
+    widths = CSV.read(widthfile, DataFrame)
+    pool = species_pool(envelopes, widths,
+                        authority = wfo_authority(handle = handle),
+                        verbosity = :silent).pool.species
     taxonomy = Dict(String(r.name) => (r.genus, r.family, r.order)
                     for r in eachrow(pool))
-    era5 = joinpath(datadir(), "era5")
+    era5 = provide_files(handle, :era5, joinpath(datadir(), "era5"))
     windows = record_windows(records, load_stack(era5, "t2m"),
                              load_stack(era5, "tp"))
     trusted = (temperature = .!records.on_lattice,
@@ -195,6 +213,7 @@ function main()
                   prior_from_records = PRIOR_RECORDS,
                   prior_members = PRIOR_MEMBERS,
                   scores = "natural log of estimate over known width: rmse, median absolute value, exp(median) as bias; zero counts estimates of zero, left out of the rest")
+    record_table(out, :width_holdout, handle = handle)
     println(nrow(scores), " scores -> ", out)
     return scores
 end

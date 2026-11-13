@@ -1,0 +1,27 @@
+# The country centroids cleaning drops records near, cut from GBIF's Catalogue of Centroids, fetched
+# and registered: the source's deposit is the run's one input, and its outputs are the files and
+# EcoSISTEM's provenance record of each. From the root of the repository:
+#
+#     fair run data/src/fetch-centroids.yaml
+#
+# Run again with everything registered, the script stops before a code run exists.
+run_metadata:
+  description: The country centroids cleaning drops records near, cut from GBIF's Catalogue of Centroids, fetched and registered
+  default_input_namespace: GBIF
+  default_output_namespace: GBIF
+  script: |
+    julia --project data/src/centroids.jl
+
+# The source's namespace, which is the run's own.
+register:
+- namespace: GBIF
+  full_name: Global Biodiversity Information Facility
+  website: https://www.gbif.org/
+
+write:
+- data_product: centroids/data/*
+  description: Country centroids cut from GBIF's Catalogue of Centroids
+  file_type: csv
+- data_product: centroids/provenance/*
+  description: EcoSISTEM's provenance record of a file under centroids
+  file_type: toml

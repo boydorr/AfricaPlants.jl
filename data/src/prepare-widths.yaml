@@ -1,0 +1,37 @@
+# The niche widths of each WFO species recorded in Africa, from ERA5 over the twelve months before
+# each record, as a preparation run: its inputs are read from the registry where the plain script
+# reads them, and the table it writes is registered with its provenance record. From the root of the
+# repository:
+#
+#     fair run data/src/prepare-widths.yaml
+run_metadata:
+  description: The niche widths of each WFO species recorded in Africa, from ERA5 over the twelve months before each record
+  default_input_namespace: AfricaPlants
+  default_output_namespace: AfricaPlants
+  # `JULIA_NUM_THREADS` where it is set, else every core: `fair` runs this with `sh`, which expands it.
+  script: |
+    julia --threads=${JULIA_NUM_THREADS:-auto} --project data/src/species_widths.jl --force
+
+register:
+- namespace: AfricaPlants
+  full_name: AfricaPlants
+  website: https://github.com/boydorr/AfricaPlants.jl
+
+# Each source's files and records in its own namespace, and each table of ours in this one.
+read:
+- data_product: CaseStudy/Data/RecordsAfrica/data/*
+- data_product: CaseStudy/Data/RecordsAfrica/provenance/*
+- data_product: era5/data/*
+  use:
+    namespace: ECMWF
+- data_product: era5/provenance/*
+  use:
+    namespace: ECMWF
+
+write:
+- data_product: CaseStudy/Data/SpeciesWidths/data/*
+  description: Niche widths of the plant species recorded in Africa
+  file_type: csv
+- data_product: CaseStudy/Data/SpeciesWidths/provenance/*
+  description: EcoSISTEM's provenance record of the table
+  file_type: toml

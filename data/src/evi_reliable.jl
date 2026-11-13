@@ -74,8 +74,18 @@ function main(argv)
                 "; nothing to do (use --force to rebuild).")
         return nothing
     end
+    return pipeline_run() do handle
+        return reliable(out, handle)
+    end
+end
+
+# The reliable mean EVI written to `out`: the mean read through the data pipeline run `handle` where
+# there is one, and the GeoTIFF registered with it.
+function reliable(out::AbstractString, handle)
+    input = joinpath(datadir(), "evi", "evi_mean_2001_2025.nc")
+    table_record(input, :evi_mean, handle = handle)
     idx = box_indices(AFRICA_BOX)
-    evi = NCDataset(joinpath(datadir(), "evi", "evi_mean_2001_2025.nc")) do ds
+    evi = NCDataset(input) do ds
         return reliable_evi(ds["evi"][idx.columns, idx.rows],
                             ds["months"][idx.columns, idx.rows])
     end
@@ -84,6 +94,7 @@ function main(argv)
                   min_evi_months = AfricaPlants.MIN_EVI_MONTHS,
                   box = Dict(string(k) => v for (k, v) in pairs(AFRICA_BOX)),
                   cells = length(evi), cells_with_evi = count(!isnan, evi))
+    record_table(out, :evi_reliable, handle = handle)
     println(count(!isnan, evi), " of ", length(evi), " cells with EVI -> ", out)
     return nothing
 end

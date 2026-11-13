@@ -94,6 +94,32 @@ replaces that, so add `singleton` to it. A job Slurm kills cannot stop the regis
 recorded on that job's node; the next job is refused with a message naming the record to delete.
 What a run registered stays in the registry on MARS until it is pushed.
 
+**The inputs through the pipeline.** A pipeline run reads every input from the local registry: the three
+tables, ERA5, Natural Earth, the WFO release and the envelopes, which the laptop's runs registered and pushed
+to the remote (`data/src/README.md`), and EarthEnv, which only these runs read, so it is fetched here. Each
+file is put where the plain run reads it, so a file there already must have the same bytes. Before the first
+replicate, from the root of the clone, once the set-up has passed:
+
+    source examples/paper/hpc/env.sh
+    sbatch --wait examples/paper/hpc/run.bash data/src/fetch-earthenv.yaml
+    julia --project=examples/paper -e 'using DataPipeline
+        fair"registry start"
+        try fair"pull examples/paper/burnin.yaml" finally fair"registry stop" end'
+
+The first job registers EarthEnv's land cover, already in the cache. The pull, on the login node, which
+reaches the remote, brings every other input the burn-in reads into the local registry; the forward run and
+the control read the same ones. A pull and a push use your token for the remote, from your account on
+`data.fairdatapipeline.org`, in `$AFRICA_HPC_ROOT/fair/remote-token`, where `setup.jl` points `fair`. A run
+that finds a file of other bytes where it would put its own stops and names it: delete the file and its
+`.provenance.toml`, and the run puts its copy there.
+
+The pipeline runs need `fair` 0.12.0 or later. The set-up keeps such a copy, as EcoSISTEM's set-up does, and
+installs the newest release where there is none or an older one.
+
+**Pushing the runs.** On the login node, with the registry started as above, `fair list code-runs` names each
+run by its UUID. Stage each with `fair add <UUID>`, then `fair push`. The laptop's runs must reach the remote
+first, since these runs read what they made.
+
 A **plain run** - `run.bash` given a script - registers nothing. The **25 km trial** was one: it
 measured the memory a full-scale run needs, the burn-in at 25 km stopped after its first yearly
 records.

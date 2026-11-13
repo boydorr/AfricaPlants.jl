@@ -18,9 +18,8 @@
 # notice). Writes `gbif/<name>/<key>.zip`, unpacks it to
 # `gbif/<name>/<key>.csv`, and records the download - its DOI, which the paper must cite, and the
 # request - in the provenance sidecar EcoSISTEM's provenance module writes and a run reads back. A
-# download present without its sidecar is recorded again without being fetched. Only the Julia
-# standard library and EcoSISTEM are used, so this runs in the package environment with nothing
-# extra.
+# download present without its sidecar is recorded again without being fetched. Launched by `fair
+# run` from `fetch-gbif.yaml`, it also registers each download's CSV and its record under `gbif`.
 
 module GBIFDownload
 
@@ -259,8 +258,9 @@ function provenance!(csv::AbstractString, key::AbstractString, s, name::Symbol;
 end
 
 # One named download: request it (or resume it, if `gbif/<name>/request.key` or `--key` names
-# one), wait, fetch.
-function download!(name::Symbol, cred; force::Bool = false, key = nothing,
+# one), wait, fetch. `credentials` is called for the account only when a request is made.
+function download!(name::Symbol, credentials::Function; force::Bool = false,
+                   key = nothing,
                    requestonly::Bool = false)
     range = REQUESTS[name]
     dir = joinpath(datadir(), "gbif", String(name))
@@ -280,7 +280,7 @@ function download!(name::Symbol, cred; force::Bool = false, key = nothing,
         return nothing
     end
     if isnothing(key) || force
-        key = request_download(cred, range)
+        key = request_download(credentials(), range)
         write(keyfile, key)
         println(name, ": requested GBIF download ", key, " (", range.from, "-",
                 isnothing(range.to) ? "present" : range.to, ")")
@@ -299,6 +299,13 @@ function download!(name::Symbol, cred; force::Bool = false, key = nothing,
     return csv
 end
 
+# The CSV the download `name` of `REQUESTS` was unpacked to, named by its saved request key.
+function download_csv(name::Symbol)
+    dir = joinpath(datadir(), "gbif", String(name))
+    key = String(strip(read(joinpath(dir, "request.key"), String)))
+    return joinpath(dir, key * ".csv")
+end
+
 # The downloads named on the command line (both by default), in order.
 function main(argv)
     named = [Symbol(a)
@@ -310,11 +317,12 @@ function main(argv)
     key = !isnothing(i) && i < length(argv) ? argv[i + 1] : nothing
     (!isnothing(key) && length(names) != 1) &&
         error("--key applies to one download; name it: era5 or early")
-    cred = _credentials()
+    requestonly = "--request-only" in argv
     for name in names
-        download!(name, cred, force = forced(argv), key = key,
-                  requestonly = "--request-only" in argv)
+        download!(name, _credentials, force = forced(argv), key = key,
+                  requestonly = requestonly)
     end
+    requestonly || pipeline_register(download_csv.(names), :gbif)
     return nothing
 end
 

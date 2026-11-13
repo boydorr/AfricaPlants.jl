@@ -13,7 +13,7 @@ a cell with fewer has no EVI, and its records weigh nothing.
 const MIN_EVI_MONTHS = 36
 
 """
-    seeding_layer(path)
+    seeding_layer(path; handle = nothing)
 
 Return the layer each seeding record is weighed by, on a 0.05 degree grid of its own over Africa:
 each cell's mean EVI times the cell's land area within Natural Earth's Africa, as an area. A negative
@@ -22,15 +22,20 @@ must call it.
 
   - `path`: the mean EVI over the Africa box as a GeoTIFF, `NaN` where it rests on too few months, as
     `data/src/evi_reliable.jl` writes it.
+  - `handle`: the data pipeline run Natural Earth's outline is read through, or `nothing`, the
+    default, for none.
 """
-function seeding_layer(path::AbstractString)
+function seeding_layer(path::AbstractString; handle = nothing)
     evi = RasterFileSpec(path, axis = EcoSISTEM.NicheAxis)
-    land = ShapeCoverage(NaturalEarthSpec("Africa", level = "CONTINENT"),
+    land = ShapeCoverage(NaturalEarthSpec("Africa", level = "CONTINENT",
+                                          track = source_track(handle,
+                                                               :naturalearth)),
                          axis = SurfaceArea)
     amount = ConstructedRasterSpec(evi, land, axis = SurfaceArea) do e, l
         return max.(e, 0.0) .* l
     end
-    grid = StudyArea(regime = evi, within = africa_within(), cellsize = 0.05°,
+    grid = StudyArea(regime = evi, within = africa_within(handle = handle),
+                     cellsize = 0.05°,
                      verbosity = :silent)
     return EcoSISTEM.materialise(amount, grid, role = EcoSISTEM.Resource)
 end

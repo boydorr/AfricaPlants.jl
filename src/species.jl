@@ -42,7 +42,7 @@ one accepted name.
 const WFO_RELEASE = "2026-06"
 
 """
-    wfo_authority(; path = nothing)
+    wfo_authority(; path = nothing, handle = nothing)
 
 Return the name authority species names are standardised through: the WFO Plant List release
 [`WFO_RELEASE`](@ref), names WFO has not checked left out, and a name written alike for several
@@ -50,10 +50,13 @@ species taken as the one of them WFO accepts, where it accepts one.
 
   - `path`: where the release's file is kept, or `nothing` for EcoSISTEM's asset cache, which fetches
     it on first use.
+  - `handle`: the data pipeline run the release is read through, or `nothing`, the default, for
+    none.
 """
-function wfo_authority(; path::Union{Nothing, AbstractString} = nothing)
+function wfo_authority(; path::Union{Nothing, AbstractString} = nothing,
+                       handle = nothing)
     return WFOPlantList(release = WFO_RELEASE, prefer_accepted = true,
-                        path = path)
+                        path = path, track = source_track(handle, :wfo))
 end
 
 # The mean of `values` weighted by `weights`, over the entries that have a value; `missing` where none
@@ -238,16 +241,23 @@ function scaled_pool(pool::SpeciesPool)
 end
 
 """
-    envelopes_record(path)
+    envelopes_record(path; handle = nothing)
 
 Return the [`ProvenanceRecord`](@ref) of the published climate envelopes at `path`, for a run's
 provenance: the record `data/src/envelopes.jl` writes beside them, naming the dataset by its DOI
 and the paper it was made for as its deposit, cited apart. Where there is none, one is written from
-the dataset's DOI alone, which needs the network and names no paper.
+the dataset's DOI alone, which needs the network and names no paper. Given the `handle` of a data
+pipeline run that reads them, the run's copy of the envelopes and their record are first put in
+place at `path` from the run's store.
+
+  - `path`: the envelopes' table.
+  - `handle`: the data pipeline run reading it, or `nothing`, the default, for none.
 """
-function envelopes_record(path::AbstractString)
+function envelopes_record(path::AbstractString; handle = nothing)
     return EcoSISTEM.Provenancer.record_provenance(path, ENVELOPES_DOI,
-                                                   role = :species)
+                                                   role = :species,
+                                                   track = source_track(handle,
+                                                                        :envelopes))
 end
 
 """

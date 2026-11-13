@@ -1,0 +1,29 @@
+# ERA5's monthly means over the Africa box, 1940 to August 2026, fetched and registered: the
+# source's deposit is the run's one input, and its outputs are the files and EcoSISTEM's provenance
+# record of each. From the root of the repository:
+#
+#     fair run data/src/fetch-era5.yaml
+#
+# Run again with everything registered, the script stops before a code run exists.
+#
+# The month named is the last of final ERA5 the runs start from: change it only with the ERA5 files.
+run_metadata:
+  description: ERA5's monthly means over the Africa box, 1940 to August 2026, fetched and registered
+  default_input_namespace: ECMWF
+  default_output_namespace: ECMWF
+  script: |
+    julia --project data/src/era5_download.jl --through=2026-08
+
+# The source's namespace, which is the run's own.
+register:
+- namespace: ECMWF
+  full_name: European Centre for Medium-Range Weather Forecasts
+  website: https://www.ecmwf.int/
+
+write:
+- data_product: era5/data/*
+  description: An ERA5 monthly-means extract over the Africa box from the Climate Data Store
+  file_type: nc
+- data_product: era5/provenance/*
+  description: EcoSISTEM's provenance record of a file under era5
+  file_type: toml

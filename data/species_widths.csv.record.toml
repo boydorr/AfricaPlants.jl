@@ -1,0 +1,23 @@
+bytes = 4545023
+file = "species_widths.csv"
+identifies = "data"
+key = "AfricaPlants_species_widths"
+licence = "cc-by-nc-4.0"
+namespace = "AfricaPlants"
+primary = false
+role = "species"
+route = "OtherOrigin"
+sha256 = "5c81507c33d16dd8385845a73dda98df10cb7fb76c6b8b8ed4bcc4729d53c174"
+source = "AfricaPlants species_widths"
+title = "Niche widths of the plant species recorded in Africa"
+writer = "EcoSISTEM.Provenancer 0.11.1"
+
+[[references]]
+doi = "10.15468/dl.n4a2sa"
+text = ""
+[[references]]
+doi = "10.5281/zenodo.20782718"
+text = ""
+[[references]]
+doi = "10.24381/cds.f17050d7"
+text = ""

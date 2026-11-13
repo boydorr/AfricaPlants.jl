@@ -22,6 +22,7 @@ using Diversity: Diversity
 using Statistics: mean, median
 using DimensionalData: DimensionalData
 using NCDatasets: NCDatasets
+using DataPipeline: DataPipeline
 
 # EcoSISTEM's memory guidance for large runs, shared with its HPC scripts rather than copied.
 # It is an example file of that package, not its API, so the path is pinned by the EcoSISTEM
@@ -34,6 +35,7 @@ include("axes.jl")
 include("landscape.jl")
 include("species.jl")
 include("seeding.jl")
+include("provenance.jl")
 include("run.jl")
 
 export smallscale, mediumscale, SCALED_SPECIES, requested_cellsize,
@@ -52,6 +54,8 @@ export smallscale, mediumscale, SCALED_SPECIES, requested_cellsize,
        species_pool, scaled_pool, envelopes_record,
        africa_species,
        MIN_EVI_MONTHS, seeding_layer, months_back, scale_to_total,
+       TABLES, table_facts, table_root, table_sidecar, table_record,
+       SOURCE_ROOTS, source_track, provide_file, provide_files,
        positioning_layers, africa_ecosystem, gbif_record,
        DIVERSITY_ORDERS, METACOMMUNITY_MEASURES, record_diversity
 

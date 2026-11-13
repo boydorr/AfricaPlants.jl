@@ -4,15 +4,16 @@
 # ecosystem each stage runs, and the table of each recorded year a stage writes.
 
 """
-    positioning_layers()
+    positioning_layers(; handle = nothing)
 
 Return the `regime` and `supply` a study area over Africa is positioned and costed with: no regime,
 and the ground available to plants as the supply. Land cover has values over the sea as well as the
 land, so it removes no coastal cell the outline touches, and the outline alone decides which cells
-are simulated.
+are simulated. `handle` is the data pipeline run the land cover is read through, or `nothing`, the
+default, for none.
 """
-function positioning_layers()
-    return (regime = nothing, supply = available_ground())
+function positioning_layers(; handle = nothing)
+    return (regime = nothing, supply = available_ground(handle = handle))
 end
 
 """
@@ -20,7 +21,7 @@ end
                      from = nothing, elapsed = nothing, changing = (), seed = 1,
                      epoch = Dates.Date(FIRST_FULL_YEAR, 1, 1), dir = era5_dir(),
                      distributed = :auto,
-                     provenance = EcoSISTEM.ProvenanceRecord[])
+                     provenance = EcoSISTEM.ProvenanceRecord[], handle = nothing)
 
 Build the ecosystem of `species` on `area` with the climate laid out as `timing` says, stepped by
 `MeanMonths()` from `epoch`, serial or across MPI ranks as the process was launched: empty, or
@@ -47,6 +48,8 @@ placed by `placement`, or the state a run saved at `from`, carried on.
     session and a serial one otherwise; `true` and `false` demand one or the other.
   - `provenance`: the records of the data the run as a whole was given, such as the occurrence
     records it was seeded from.
+  - `handle`: the data pipeline run the climate and land cover are read through, or `nothing`, the
+    default, for none.
 """
 function africa_ecosystem(species, area::StudyArea,
                           timing::AbstractClimateTiming = ForwardClimate();
@@ -56,8 +59,9 @@ function africa_ecosystem(species, area::StudyArea,
                           changing = (), seed::Integer = 1,
                           epoch::Dates.Date = Dates.Date(FIRST_FULL_YEAR, 1, 1),
                           dir::AbstractString = era5_dir(), distributed = :auto,
-                          provenance = EcoSISTEM.ProvenanceRecord[])
-    layers = africa_layers(timing, dir = dir)
+                          provenance = EcoSISTEM.ProvenanceRecord[],
+                          handle = nothing)
+    layers = africa_layers(timing, dir = dir, handle = handle)
     habitat = GridHabitat(regime = layers.regime, supply = layers.supply,
                           area = area)
     isnothing(from) ||

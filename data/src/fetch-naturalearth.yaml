@@ -1,0 +1,27 @@
+# Natural Earth's outlines, which give Africa's, fetched and registered: the source's deposit is the
+# run's one input, and its outputs are the files and EcoSISTEM's provenance record of each. From the
+# root of the repository:
+#
+#     fair run data/src/fetch-naturalearth.yaml
+#
+# Run again with everything registered, the script stops before a code run exists.
+run_metadata:
+  description: Natural Earth's outlines, which give Africa's, fetched and registered
+  default_input_namespace: NaturalEarth
+  default_output_namespace: NaturalEarth
+  script: |
+    julia --project data/src/fetch.jl naturalearth
+
+# The source's namespace, which is the run's own.
+register:
+- namespace: NaturalEarth
+  full_name: Natural Earth
+  website: https://www.naturalearthdata.com/
+
+write:
+- data_product: naturalearth/data/*
+  description: A Natural Earth zip of outlines
+  file_type: zip
+- data_product: naturalearth/provenance/*
+  description: EcoSISTEM's provenance record of a file under naturalearth
+  file_type: toml

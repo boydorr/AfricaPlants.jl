@@ -9,7 +9,8 @@
 #     julia --project data/src/envelopes.jl [--force] [path]
 #
 # `path` is the table, by default `AFRICA_ENVELOPES` or `plant_trait/data/` in the data directory.
-# A table recorded already is left as it is; `--force` records it afresh.
+# A table recorded already is left as it is; `--force` records it afresh. Launched by `fair run` from
+# `fetch-envelopes.yaml`, it also registers the table and its record under `envelopes`.
 
 module Envelopes
 
@@ -42,6 +43,7 @@ function main(argv)
              record_provenance(path, envelopes_facts(), role = :species)
     show(stdout, MIME"text/plain"(), record)
     println()
+    pipeline_register([path], :envelopes)
     return record
 end
 

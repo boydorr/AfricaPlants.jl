@@ -1,0 +1,51 @@
+# The hold-out experiment behind the width shrinkage, scoring each rule against species cut down to
+# few records, as a preparation run: its inputs are read from the registry where the plain script
+# reads them, and the table it writes is registered with its provenance record. From the root of the
+# repository:
+#
+#     fair run data/src/prepare-holdout.yaml
+run_metadata:
+  description: The hold-out experiment behind the width shrinkage, scoring each rule against species cut down to few records
+  default_input_namespace: AfricaPlants
+  default_output_namespace: AfricaPlants
+  # `JULIA_NUM_THREADS` where it is set, else every core: `fair` runs this with `sh`, which expands it.
+  script: |
+    julia --threads=${JULIA_NUM_THREADS:-auto} --project data/src/width_holdout.jl
+
+register:
+- namespace: AfricaPlants
+  full_name: AfricaPlants
+  website: https://github.com/boydorr/AfricaPlants.jl
+
+# Each source's files and records in its own namespace, and each table of ours in this one.
+read:
+- data_product: CaseStudy/Data/RecordsAfrica/data/*
+- data_product: CaseStudy/Data/RecordsAfrica/provenance/*
+- data_product: CaseStudy/Data/SpeciesWidths/data/*
+- data_product: CaseStudy/Data/SpeciesWidths/provenance/*
+- data_product: era5/data/*
+  use:
+    namespace: ECMWF
+- data_product: era5/provenance/*
+  use:
+    namespace: ECMWF
+- data_product: envelopes/data/*
+  use:
+    namespace: EIDC
+- data_product: envelopes/provenance/*
+  use:
+    namespace: EIDC
+- data_product: wfo/data/*
+  use:
+    namespace: WFO
+- data_product: wfo/provenance/*
+  use:
+    namespace: WFO
+
+write:
+- data_product: CaseStudy/Data/WidthHoldout/data/*
+  description: Scores of niche width rules against species cut down to few records
+  file_type: csv
+- data_product: CaseStudy/Data/WidthHoldout/provenance/*
+  description: EcoSISTEM's provenance record of the table
+  file_type: toml

@@ -20,9 +20,11 @@ using CSV
 using DataFrames
 using Statistics
 
+using AfricaPlants: provide_files, table_record
+
 include("species_traits.jl")
 using .SpeciesTraits: load_stack, window_summary, datadir, forced,
-                      write_sidecar
+                      write_sidecar, record_table, pipeline_run
 
 const MIN_RECORDS = 2
 
@@ -83,11 +85,21 @@ function main(argv)
                 "; nothing to do (use --force to rebuild).")
         return nothing
     end
-    records = CSV.read(joinpath(datadir(), "records_africa.csv"), DataFrame)
+    return pipeline_run() do handle
+        return widths(out, handle)
+    end
+end
+
+# The niche widths per WFO species, written to `out`: the Africa records and ERA5 read through the
+# data pipeline run `handle` where there is one, and the table registered with it.
+function widths(out::AbstractString, handle)
+    input = joinpath(datadir(), "records_africa.csv")
+    table_record(input, :records_africa, handle = handle)
+    records = CSV.read(input, DataFrame)
     filter!(r -> !ismissing(r.wfo_species), records)
     println("Read ", nrow(records), " records of a WFO species")
     flush(stdout)
-    era5 = joinpath(datadir(), "era5")
+    era5 = provide_files(handle, :era5, joinpath(datadir(), "era5"))
     windows = record_windows(records, load_stack(era5, "t2m"),
                              load_stack(era5, "tp"))
     records.tmin = windows.tmin
@@ -106,6 +118,7 @@ function main(argv)
                   window_months = 12,
                   temperature = "minimum monthly t2m over the window, K; records on the quarter-degree lattice left out",
                   precipitation = "mean monthly tp over the window, m/day; records on the lattice, near a botanic garden or naming one left out")
+    record_table(out, :species_widths, handle = handle)
     println(nrow(table), " species -> ", out)
     return nothing
 end

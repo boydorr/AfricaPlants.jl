@@ -44,14 +44,54 @@ julia --project data/src/species_traits.jl
 julia --project -t auto data/src/species_widths.jl
 ```
 
+## Through the data pipeline
+
+Every script also runs as a FAIR data pipeline run, and the paper's inputs are made that way. Run
+plainly, a script registers nothing. Launched by `fair run`, it takes the run's handle, reads its
+inputs from the registry, and registers what it fetched or made. The files land where the plain
+script puts them, so the two routes give the same files.
+
+A fetch run registers one source: each of its files, with EcoSISTEM's provenance record of the file,
+in the source's own namespace. The source's deposit is the run's one input. There is a config for
+each source, `fetch-<source>.yaml`. `fetch.jl <source>` fetches the files EcoSISTEM keeps in its
+asset cache: the WFO release, Natural Earth's outlines, WorldClim's annual mean temperature and
+EarthEnv's land cover. Only the HPC's runs read EarthEnv, so its fetch run is made there. The MODIS
+files and the centroids and gardens tables keep their own sidecar as `.provenance.toml`, so
+EcoSISTEM's record of each is `<file>.record.toml`. A fetch run with everything registered already
+stops before a code run exists.
+
+A preparation run makes one table: `prepare-<step>.yaml` reads each input to where the plain script
+reads it, rebuilds the table with `--force`, and registers it and its record as
+`AfricaPlants:CaseStudy/Data/<Stem>/data/<file stem>` and `.../provenance/<file stem>`.
+
+Each run is `fair pull --local <config>`, which registers the config's namespace, then
+`fair run <config>`. The ERA5 config names the last month of final ERA5 the runs use.
+
+```sh
+for source in envelopes centroids gardens wfo naturalearth worldclim era5 gbif modis; do
+    fair pull --local data/src/fetch-$source.yaml && fair run data/src/fetch-$source.yaml
+done
+fair pull --local data/src/prepare-clean.yaml && fair run data/src/prepare-clean.yaml
+fair pull --local data/src/prepare-africa.yaml && fair run data/src/prepare-africa.yaml
+fair pull --local data/src/prepare-widths.yaml && fair run data/src/prepare-widths.yaml
+fair pull --local data/src/prepare-evimean.yaml && fair run data/src/prepare-evimean.yaml
+fair pull --local data/src/prepare-evireliable.yaml && fair run data/src/prepare-evireliable.yaml
+fair pull --local data/src/prepare-holdout.yaml && fair run data/src/prepare-holdout.yaml
+```
+
+The GBIF download, the MODIS files, the gardens and WorldClim's file are registered but not public:
+a push sends their records and not the files. Their licences or size forbid more, and only the
+preparation runs read them.
+
 ## Credentials
 
 Never in the repository. The CDS key lives in `~/.cdsapirc` as the `cdsapi` client expects; the
 GBIF username, password and the email GBIF notifies come from the environment or from
 `~/.gbifrc`, a TOML file with `user`, `pwd` and `email` lines. The NASA Earthdata token for the EVI
 files comes from `EARTHDATA_TOKEN` or from `~/.earthdata_token`, a file holding only the token and
-readable only by its owner; tokens expire after about 60 days. A script that
-cannot find its credentials says which are missing and stops before touching the network.
+readable only by its owner; tokens expire after about 60 days. A script reads its credentials only
+when it has something to fetch. One that cannot find them says which are missing and stops before
+touching the network.
 
 ## What each output is
 

@@ -13,7 +13,7 @@ extent. A simulation needs a projected grid because dispersal assumes one unifor
 const AFRICA_CRS = EPSG(10592)
 
 """
-    africa_within(; outline = true, coverage = AllTerritories())
+    africa_within(; outline = true, coverage = AllTerritories(), handle = nothing)
 
 Return the `within` specification positioning a study area over Africa: Natural Earth's
 continent-level "Africa", downloaded the first time it is built, activating every cell the outline
@@ -22,13 +22,17 @@ available-ground supply scales it to that land; or with `outline = false` its bo
 no download.
 
 `coverage` says how much of the name to take. The default keeps every territory, Madagascar
-and the islands included; `LargestLandmass()` keeps the mainland only.
+and the islands included; `LargestLandmass()` keeps the mainland only. `handle` is the data pipeline
+run the outline is read through, or `nothing`, the default, for none.
 """
-function africa_within(; outline::Bool = true, coverage = AllTerritories())
+function africa_within(; outline::Bool = true, coverage = AllTerritories(),
+                       handle = nothing)
     outline || return EcoSISTEM.boundingbox("Africa", level = "CONTINENT",
                                  coverage = coverage)
     return ShapeMaskSpec(NaturalEarthSpec("Africa", level = "CONTINENT",
-                                          coverage = coverage),
+                                          coverage = coverage,
+                                          track = source_track(handle,
+                                                               :naturalearth)),
                          AnyOverlap())
 end
 

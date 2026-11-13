@@ -69,15 +69,17 @@ function era5_last_month(dir::AbstractString = era5_dir();
 end
 
 """
-    available_ground()
+    available_ground(; handle = nothing)
 
 Return the layer of ground available to plants in each cell, the summed shares of the
-[`AVAILABLE_CLASSES`](@ref), as a space supply.
+[`AVAILABLE_CLASSES`](@ref), as a space supply. `handle` is the data pipeline run the land cover is
+read through, or `nothing`, the default, for none.
 """
-function available_ground()
-    return ConstructedRasterSpec(EarthEnv{LandCover},
-                                 collect(AVAILABLE_CLASSES),
-                                 axis = SurfaceArea) do bands...
+function available_ground(; handle = nothing)
+    classes = [SourceSpec(EarthEnv{LandCover}, class,
+                          track = source_track(handle, :earthenv))
+               for class in AVAILABLE_CLASSES]
+    return ConstructedRasterSpec(classes..., axis = SurfaceArea) do bands...
         return sum(bands)
     end
 end
@@ -261,9 +263,11 @@ function _slices(r, which, times)
                                    r.code)
 end
 
-# An ERA5 monthly variable read from `dir` as a dated series.
-function _era5source(code::AbstractString, dir::AbstractString)
-    return SourceSpec(ERA, code, directory = dir, atend = HoldAtEnd())
+# An ERA5 monthly variable read from `dir` as a dated series, through the data pipeline run `handle`
+# where there is one.
+function _era5source(code::AbstractString, dir::AbstractString, handle)
+    return SourceSpec(ERA, code, directory = dir, atend = HoldAtEnd(),
+                      track = source_track(handle, :era5))
 end
 
 # An ERA5 monthly variable read from `dir` onto `axis`, the axis the species' tolerance names,
@@ -271,8 +275,8 @@ end
 # build onto the same active cells.
 function _era5(code::AbstractString, axis::Type{<:EcoSISTEM.NicheAxis},
                dir::AbstractString, timing::AbstractClimateTiming,
-               statistic::AbstractRegimeStatistic)
-    return ConstructedRasterSpec(_era5source(code, dir), axis = axis,
+               statistic::AbstractRegimeStatistic, handle)
+    return ConstructedRasterSpec(_era5source(code, dir, handle), axis = axis,
                                  atend = _atend(timing),
                                  calendar = _calendar(timing)) do values
         return _laidout(values, statistic, timing)
@@ -286,8 +290,9 @@ end
 # supply at all.
 function _gated(code::AbstractString, axis::Type{<:EcoSISTEM.NicheAxis},
                 dir::AbstractString, timing::AbstractClimateTiming,
-                statistic::AbstractRegimeStatistic = MonthlyValue())
-    return ConstructedRasterSpec(_era5source(code, dir), available_ground(),
+                statistic::AbstractRegimeStatistic, handle)
+    return ConstructedRasterSpec(_era5source(code, dir, handle),
+                                 available_ground(handle = handle),
                                  axis = axis, atend = _atend(timing),
                                  calendar = _calendar(timing)) do values, ground
         gated = max.(values, zero(eltype(values.array))) .* ground
@@ -298,7 +303,7 @@ end
 """
     africa_layers(timing = ForwardClimate(); dir = era5_dir(),
                   temperature = TrailingMinimum(), rainfall = TrailingMean(),
-                  water = TrailingMean())
+                  water = TrailingMean(), handle = nothing)
 
 Return the layers of a run as a named tuple of `regime`, the ERA5 2 m temperature and total
 precipitation named `temperature` and `rainfall`, and `supply`: the available ground named `space`,
@@ -321,17 +326,22 @@ supply. Light stays monthly.
   - `temperature`: the [`AbstractRegimeStatistic`](@ref) the temperature layer holds.
   - `rainfall`: the statistic the precipitation layer holds.
   - `water`: the statistic the precipitation supply holds.
+  - `handle`: the data pipeline run the climate and land cover are read through, or `nothing`, the
+    default, for none.
 """
 function africa_layers(timing::AbstractClimateTiming = ForwardClimate();
                        dir::AbstractString = era5_dir(),
                        temperature::AbstractRegimeStatistic = TrailingMinimum(),
                        rainfall::AbstractRegimeStatistic = TrailingMean(),
-                       water::AbstractRegimeStatistic = TrailingMean())
+                       water::AbstractRegimeStatistic = TrailingMean(),
+                       handle = nothing)
     return (regime = (temperature = _era5("t2m", AnnualMinimumTemperature, dir,
-                                          timing, temperature),
+                                          timing, temperature, handle),
                       rainfall = _era5("tp", AnnualMeanPrecipitation, dir,
-                                       timing, rainfall)),
-            supply = (space = available_ground(),
-                      light = _gated("ssr", SolarRadiation, dir, timing),
-                      water = _gated("tp", Precipitation, dir, timing, water)))
+                                       timing, rainfall, handle)),
+            supply = (space = available_ground(handle = handle),
+                      light = _gated("ssr", SolarRadiation, dir, timing,
+                                     MonthlyValue(), handle),
+                      water = _gated("tp", Precipitation, dir, timing, water,
+                                     handle)))
 end

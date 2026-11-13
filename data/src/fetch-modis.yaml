@@ -1,0 +1,28 @@
+# The MODIS/Terra monthly vegetation index files, 2001 to 2025, fetched and registered: the source's
+# deposit is the run's one input, and its outputs are the files and EcoSISTEM's provenance record of
+# each. From the root of the repository:
+#
+#     fair run data/src/fetch-modis.yaml
+#
+# Run again with everything registered, the script stops before a code run exists.
+run_metadata:
+  description: The MODIS/Terra monthly vegetation index files, 2001 to 2025, fetched and registered
+  default_input_namespace: LPDAAC
+  default_output_namespace: LPDAAC
+  script: |
+    julia --project data/src/evi_download.jl
+
+# The source's namespace, which is the run's own.
+register:
+- namespace: LPDAAC
+  full_name: NASA Land Processes Distributed Active Archive Center
+  website: https://lpdaac.usgs.gov/
+
+write:
+- data_product: modis/data/*
+  description: A MOD13C2 v061 monthly file of the global vegetation index
+  file_type: hdf
+  public: false
+- data_product: modis/provenance/*
+  description: EcoSISTEM's provenance record of a file under modis
+  file_type: toml

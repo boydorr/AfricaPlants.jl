@@ -49,6 +49,21 @@ const GBIF = let dir = joinpath(DATA, "gbif", "era5")
     joinpath(dir, strip(read(joinpath(dir, "request.key"), String)) * ".csv")
 end
 const SEED = parse(Int, get(ENV, "AFRICA_SEED", "1"))
+# The data pipeline run the stage is part of, which `pipeline.jl` defines in the stage's module
+# before including it, or `nothing` for a plain run. Every input is read through it: each file the
+# stage reads is put in place from the run's store before it is read.
+const HANDLE = isdefined(@__MODULE__, :PIPELINE) ? PIPELINE : nothing
+const ENVELOPES_RECORD = envelopes_record(ENVELOPES, handle = HANDLE)
+# The tables of ours the stage's species and seeding were made from, and their records, for its
+# provenance: the seeding records, the niche widths and the reliable EVI.
+const TABLE_FILES = (records_africa = "records_africa.csv",
+                     species_widths = "species_widths.csv",
+                     evi_reliable = joinpath("evi",
+                                             "evi_reliable_2001_2025.tif"))
+const TABLE_NAMES = NamedTuple{keys(TABLE_FILES)}(keys(TABLE_FILES))
+const TABLE_RECORDS = map(TABLE_FILES, TABLE_NAMES) do file, table
+    return table_record(joinpath(DATA, file), table, handle = HANDLE)
+end
 # The species are the same in every replicate, so that every replicate can start from one settled
 # state: their own draws take this seed and the run's random streams take `SEED`.
 const SPECIES_SEED = parse(Int, get(ENV, "AFRICA_SPECIES_SEED", "1"))
@@ -105,7 +120,9 @@ envelopes = CSV.read(ENVELOPES, DataFrame,
                      select = [:species, :numrecords, :tmin, :tp, :ssr])
 widths = CSV.read(joinpath(DATA, "species_widths.csv"), DataFrame)
 built = species_pool(envelopes, widths,
-                     provenance = envelopes_record(ENVELOPES),
+                     authority = wfo_authority(handle = HANDLE),
+                     provenance = [ENVELOPES_RECORD,
+                         TABLE_RECORDS.species_widths],
                      verbosity = ISROOT ? :normal : :silent)
 pool = scaled_pool(built.pool)
 # Every plant record, named by the WFO species its name means, with how long before the start it was
@@ -125,13 +142,14 @@ say(length(pool), " species (", length(built.unmatched),
 
 species = africa_species(pool, seed = SPECIES_SEED,
                          verbosity = ISROOT ? :normal : :silent)
-positioning = positioning_layers()
+positioning = positioning_layers(handle = HANDLE)
+within = africa_within(handle = HANDLE)
 chosen = choose_cellsize(length(pool), regime = positioning.regime,
-                         supply = positioning.supply)
+                         supply = positioning.supply, within = within)
 chosen.fits ||
     error("$(length(pool)) species at $(chosen.cellsize) do not fit in the memory available")
 area = africa_area(chosen.cellsize, regime = positioning.regime,
-                   supply = positioning.supply,
+                   supply = positioning.supply, within = within,
                    verbosity = ISROOT ? :normal : :silent)
 say("grid ", chosen.cellsize)
 
@@ -139,16 +157,21 @@ say("grid ", chosen.cellsize)
 # cell, and nothing where the EVI is not reliable. A record in a cell that is not simulated moves to
 # the nearest one within three cells.
 effort = WeightPerCell(seeding_layer(joinpath(DATA, "evi",
-                                              "evi_reliable_2001_2025.tif")),
+                                              "evi_reliable_2001_2025.tif"),
+                                     handle = HANDLE),
                        novalue = 0.0km^2)
 snap = 3 * chosen.cellsize
 
 # Backwards through the climate. Half the individuals fill each cell to what its resources hold at
 # the start, the species sharing it by their records' weights.
+# The seeding's own inputs: the download the records are cleaned from, the records, and the EVI.
+seeded_from = [gbif_record(GBIF), TABLE_RECORDS.records_africa,
+    TABLE_RECORDS.evi_reliable]
 weighted = FromOccurrences(records, weight = effort, snap = snap,
-                           level = EcoSISTEM.ProblemNotice())
+                           level = EcoSISTEM.ProblemNotice(),
+                           provenance = seeded_from)
 eco = africa_ecosystem(species, area, ReversedClimate(), seed = SEED,
-                       distributed = DISTRIBUTED,
+                       distributed = DISTRIBUTED, handle = HANDLE,
                        placement = ToCapacity(weighted))
 atstart = RecordTotals(eco, 1)
 atstart(eco, (count = 1,))
@@ -158,7 +181,8 @@ startcount = sum(atstart.species)
 # species placed in each cell are written for `recorded.jl`, as `recorded_richness.csv`.
 additions = FromOccurrences(records, time = :elapsed, weight = effort,
                             snap = snap,
-                            level = EcoSISTEM.ProblemNotice()
+                            level = EcoSISTEM.ProblemNotice(),
+                            provenance = seeded_from
                             ) do rows, habitat, context
     ISROOT && write_recorded(rows, habitat)
     within = rows[rows.time .>= zero(eltype(rows.time)), :]
@@ -171,7 +195,7 @@ additions = FromOccurrences(records, time = :elapsed, weight = effort,
             count = round.(Int, scaled.counts))
 end
 seeding = Intervention(EveryStep(), ActiveCells(), AddAbundance(additions),
-                       provenance = gbif_record(GBIF))
+                       provenance = seeded_from)
 # A stage's recorders for the start and `years` recorded years: each species' and each cell's
 # individuals, which say which species a stage lost and when, and where the individuals are, and the
 # landscape's metacommunity measures.
@@ -220,10 +244,10 @@ eco = nothing
 Base.GC.gc()
 held = africa_ecosystem(species, area, HeldClimatology(HELD_DECADE),
                         seed = SEED,
-                        distributed = DISTRIBUTED,
+                        distributed = DISTRIBUTED, handle = HANDLE,
                         from = joinpath(SAVEDIR, "burnin_seed$(SEED)_00.jld2"),
                         elapsed = 0.0s, changing = CLIMATE_LAYERS,
-                        provenance = gbif_record(GBIF))
+                        provenance = seeded_from)
 area = nothing
 Base.GC.gc()
 settling = recorders(held, HELD)

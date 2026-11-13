@@ -3,6 +3,8 @@
 *.vscode
 *.pptx
 Manifest.toml
+# Each machine's own preferences, such as where DataPipeline's `install_cli!` put its copy of `fair`
+LocalPreferences.toml
 # The HPC jobs' logs, written where they are submitted from (examples/paper/hpc/)
 africa*-*.out
 africa*-*.err

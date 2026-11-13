@@ -22,6 +22,9 @@
       (`era5_t2m_1940s_40N25W36S56E.nc`), so files fetched under 0.8 are renamed, with the `file` in
       each provenance record, or `data/src/era5_download.jl` fetches them again. `envelopes_record`
       and `gbif_record` return its `ProvenanceRecord`.
+    - DataPipeline 0.59.3 is required, for the data scripts' pipeline runs.
+    - The HPC set-up keeps a `fair` of 0.12.0 or later, and installs the newest release only where there is
+      none or an older one. A registry it installs is v1.5.0.
     - The published climate envelopes are looked for in `data/plant_trait/`, the dataset as the EIDC
       publishes it; `AFRICA_ENVELOPES` still names another copy.
     - `gbif_record(path)` takes the GBIF download itself and returns the provenance record
@@ -86,7 +89,19 @@
       `AFRICA_CELLSIZE=25km` is accepted.
     - `data/src/envelopes.jl` records where the climate envelopes came from, using their DOI and
       their paper's, in a sidecar tracked beside the table in `data/plant_trait/data/`.
+    - Every input of the paper's runs can come through the data pipeline. Launched by `fair run` from
+      `data/src/fetch-<source>.yaml` or `prepare-<step>.yaml`, a data script registers what it fetched
+      or made; run plainly, it registers nothing.
+    - The stages read every input through their pipeline run. The functions that name a source take a
+      `handle` (`africa_layers`, `africa_within`, `africa_ecosystem`, `wfo_authority` and others), and
+      `provide_file` and `provide_files` put a run's files where a plain script reads them.
+    - The tables the data scripts make carry EcoSISTEM provenance records (`table_record`), which the
+      runs' provenance files name.
+    - `examples/paper/figures.yaml` draws the figures as a pipeline run. The burn-in's recorded
+      richness and each stage's provenance file are registered too.
   - Fixed
+    - The GBIF and MODIS download scripts read their credentials only when they have something to
+      fetch.
     - A data script's provenance sidecar names the script that ran: those of `species_widths.csv`
       and `width_holdout.csv` named `species_traits.jl`, which both scripts include.
     - A run across MPI ranks no longer warns at every yearly recording that the abundances it measures

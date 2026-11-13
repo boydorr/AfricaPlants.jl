@@ -1,0 +1,30 @@
+# The published bioclimatic envelopes of global plant species, fetched and registered: the source's
+# deposit is the run's one input, and its outputs are the files and EcoSISTEM's provenance record of
+# each. From the root of the repository:
+#
+#     fair run data/src/fetch-envelopes.yaml
+#
+# Run again with everything registered, the script stops before a code run exists.
+#
+# The table is the EIDC's, downloaded by hand into `data/plant_trait/`: the run records and
+# registers it.
+run_metadata:
+  description: The published bioclimatic envelopes of global plant species, fetched and registered
+  default_input_namespace: EIDC
+  default_output_namespace: EIDC
+  script: |
+    julia --project data/src/envelopes.jl
+
+# The source's namespace, which is the run's own.
+register:
+- namespace: EIDC
+  full_name: NERC Environmental Information Data Centre
+  website: https://eidc.ac.uk/
+
+write:
+- data_product: envelopes/data/*
+  description: The bioclimatic envelopes of global plant species, as the EIDC publishes them
+  file_type: csv
+- data_product: envelopes/provenance/*
+  description: EcoSISTEM's provenance record of a file under envelopes
+  file_type: toml

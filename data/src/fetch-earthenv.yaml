@@ -1,0 +1,29 @@
+# EarthEnv's land cover, which gives the ground available to plants, fetched and registered: the
+# source's deposit is the run's one input, and its outputs are the files and EcoSISTEM's provenance
+# record of each. From the root of the repository:
+#
+#     fair run data/src/fetch-earthenv.yaml
+#
+# Run again with everything registered, the script stops before a code run exists.
+#
+# Only the HPC's runs read it, so it is fetched and registered there.
+run_metadata:
+  description: EarthEnv's land cover, which gives the ground available to plants, fetched and registered
+  default_input_namespace: EarthEnv
+  default_output_namespace: EarthEnv
+  script: |
+    julia --project data/src/fetch.jl earthenv
+
+# The source's namespace, which is the run's own.
+register:
+- namespace: EarthEnv
+  full_name: EarthEnv
+  website: https://www.earthenv.org/
+
+write:
+- data_product: earthenv/data/*
+  description: An EarthEnv land cover class
+  file_type: tif
+- data_product: earthenv/provenance/*
+  description: EcoSISTEM's provenance record of a file under earthenv
+  file_type: toml

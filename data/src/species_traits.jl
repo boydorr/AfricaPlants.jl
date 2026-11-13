@@ -216,20 +216,24 @@ end
 # --- the Africa subset -----------------------------------------------------------------
 
 """
-    in_africa(records) -> BitVector
+    in_africa(records; handle = nothing) -> BitVector
 
 Return, for each record, whether it lies in an active cell of a geographic study grid over Natural
 Earth's continent-level Africa, as [`africa_within`](@ref) activates them - every cell the outline
 touches - with WorldClim's 10 arcminute annual mean temperature positioning the grid (cached after
 the first download). A record off the grid or in a cell the outline does not touch is `false`.
+`handle` is the data pipeline run the temperature and the outline are read through, or `nothing`,
+the default, for none.
 """
-function in_africa(records::DataFrame)
-    temperature = SourceSpec(WorldClim{BioClim}, :bio1)
+function in_africa(records::DataFrame; handle = nothing)
+    temperature = SourceSpec(WorldClim{BioClim}, :bio1,
+                             track = source_track(handle, :worldclim))
     # No `crs`: the grid stays WorldClim's own geographic lattice, which can be built and
     # indexed by latitude and longitude though not simulated. 10 arcminutes is WorldClim's
     # own resolution, so nothing is resampled. `Unitful.d` rather than `day`, which `Dates`
     # (loaded by `common.jl`) also exports.
-    area = StudyArea(regime = temperature, within = africa_within(),
+    area = StudyArea(regime = temperature,
+                     within = africa_within(handle = handle),
                      cellsize = 10.0arcminute, verbosity = :silent)
     environment = GridHabitat(regime = temperature,
                               supply = UniformSpec(1.0kJ / (m^2 * Unitful.d),
@@ -272,10 +276,22 @@ function main(argv)
                 "; nothing to do (use --force to rebuild).")
         return nothing
     end
-    records = CSV.read(joinpath(datadir(), "records.csv"), DataFrame)
+    return pipeline_run() do handle
+        return africa_records(out, handle)
+    end
+end
+
+# The records within Africa's outline, each with its WFO species, written to `out`: the records, the
+# outline, WorldClim's grid and the WFO release read through the data pipeline run `handle` where
+# there is one, and the table registered with it.
+function africa_records(out::AbstractString, handle)
+    input = joinpath(datadir(), "records.csv")
+    table_record(input, :records, handle = handle)
+    records = CSV.read(input, DataFrame)
     println("Read ", nrow(records), " records")
-    africa = records[in_africa(records), :]
-    named = wfo_species(africa.species)
+    africa = records[in_africa(records, handle = handle), :]
+    named = wfo_species(africa.species,
+                        authority = wfo_authority(handle = handle))
     africa.wfo_species = named.species
     africa.wfo_id = named.id
     CSV.write(out, africa)
@@ -288,6 +304,7 @@ function main(argv)
                   flagged_on_lattice = count(africa.on_lattice),
                   flagged_near_garden = count(africa.near_garden),
                   flagged_garden_named = count(africa.garden_named))
+    record_table(out, :records_africa, handle = handle)
     println(nrow(africa), " records of ", length(unique(africa.speciesKey)),
             " species inside Africa's outline -> ", out)
     return nothing

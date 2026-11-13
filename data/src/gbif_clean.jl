@@ -332,8 +332,26 @@ function _inputs(argv)
 end
 
 function main(argv)
+    return pipeline_run() do handle
+        return clean(argv, handle)
+    end
+end
+
+# Clean each download `argv` names, reading the download, the centroids and the gardens through the
+# data pipeline run `handle` where there is one, and registering `records.csv` with it.
+function clean(argv, handle)
     centroidfile = joinpath(datadir(), "centroids.csv")
     gardenfile = joinpath(datadir(), "gardens.csv")
+    if !isnothing(handle)
+        AfricaPlants.provide_files(handle, :gbif,
+                                   joinpath(datadir(), "gbif", "era5"))
+        for file in (centroidfile, gardenfile)
+            AfricaPlants.provide_file(handle,
+                                      file == centroidfile ? :centroids :
+                                      :gardens, file,
+                                      sidecar = file * ".record.toml")
+        end
+    end
     centroids = nothing
     gardens = nothing
     for (input, output) in _inputs(argv)
@@ -368,6 +386,8 @@ function main(argv)
                                      if isfile(f)],
                       max_uncertainty_m = MAX_UNCERTAINTY_M,
                       basis_of_record = sort(collect(KEEP_BASIS)))
+        basename(output) == "records.csv" &&
+            record_table(output, :records, handle = handle)
         println("Kept ", result.kept, " of ", result.seen, " records -> ",
                 output, " (dropped ", result.centroid,
                 " near a country centroid, ",

@@ -3,7 +3,7 @@
 # The data pipeline for the paper's runs on an HPC, set up once by `setup.bash`: DataPipeline's own
 # copy of `fair`, a local registry, and this clone initialised with a CLI configuration written here.
 # Run from the root of the clone, in `examples/paper`'s environment, after `env.sh`; run again, it
-# brings the copy of `fair` up to date and leaves the rest as it is.
+# leaves a `fair` new enough and the registry as they are.
 #
 # `fair` keeps one local registry for each user, in `~/.fair`, and initialising a clone points every
 # clone of that user's at the registry it names. So the registry, its data store and who the runs
@@ -12,9 +12,10 @@
 
 using DataPipeline
 
-# The releases installed: those EcoSISTEM's paper set-up installs.
-const CLI_VERSION = "0.11.0"
-const REGISTRY_VERSION = "v1.4.0"
+# The oldest `fair` the paper's pipeline runs work with, and the registry release installed where
+# there is none: production's.
+const MINIMUM_CLI = v"0.12.0"
+const REGISTRY_VERSION = "v1.5.0"
 
 const FAIR = joinpath(ENV["AFRICA_HPC_ROOT"], "fair")
 const PORT = ENV["AFRICA_HPC_PORT"]
@@ -28,7 +29,13 @@ isfile(USERFILE) ||
 any(line -> occursin(r"^[^#]*<", line), eachline(USERFILE)) &&
     error("$USERFILE still has a `<...>` to replace")
 
-DataPipeline.install_cli(version = CLI_VERSION)
+# A `fair` of `MINIMUM_CLI` or later is kept, a copy from FAIR-CLI's `Dev` branch among them, as
+# EcoSISTEM's paper set-up keeps it, since both set-ups share the copy in the depot. Otherwise the
+# newest release is installed.
+current = DataPipeline.cli_version()
+if isnothing(current) || current < MINIMUM_CLI
+    DataPipeline.install_cli!()
+end
 
 if !isfile(joinpath(REGISTRY, "manage.py"))
     mkpath(dirname(REGISTRY))
