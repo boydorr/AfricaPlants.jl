@@ -15,7 +15,7 @@
         "macOS"
     ],
     "version": "v0.3.0",
-    "dateModified": "2026-10-23",
+    "dateModified": "2026-11-13",
     "datePublished": "2023-09-04",
     "downloadUrl": "https://github.com/boydorr/AfricaPlants.jl/archive/refs/tags/v0.3.0.tar.gz",
     "license": "https://spdx.org/licenses/LGPL-3.0-or-later",
@@ -63,5 +63,6 @@
     "continuousIntegration": "https://github.com/boydorr/AfricaPlants.jl/actions/workflows/testing.yaml",
     "codemeta:contIntegration": {
         "id": "https://github.com/boydorr/AfricaPlants.jl/actions/workflows/testing.yaml"
-    }
+    },
+    "buildInstructions": "https://github.com/boydorr/AfricaPlants.jl/blob/HEAD/README.md"
 }
