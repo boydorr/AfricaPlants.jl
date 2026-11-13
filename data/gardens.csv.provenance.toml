@@ -1,0 +1,11 @@
+source = "CoordinateCleaner institutions gazetteer"
+commit = "24706b5d9ac928fd3331a0cff9572caa7f575885"
+writer = "data/src/gardens.jl"
+typed_botanic_garden = 701
+licence = "GPL-3 (CoordinateCleaner)"
+written = "2026-09-13T23:16:30.613"
+citation = "Zizka et al. (2019) CoordinateCleaner: standardized cleaning of occurrence records from biological collection databases. Methods in Ecology and Evolution 10:744-751, doi:10.1111/2041-210X.13152"
+named_as_garden = 351
+bytes = 80702
+gardens = 1052
+url = "https://raw.githubusercontent.com/ropensci/CoordinateCleaner/24706b5d9ac928fd3331a0cff9572caa7f575885/data/institutions.rda"

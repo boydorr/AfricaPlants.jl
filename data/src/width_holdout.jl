@@ -10,7 +10,7 @@
 # further records, by the package's own `shrink_width`. The prior is either
 # the `pool`'s, the median width of every well-recorded species, or the `taxon`'s, the median width
 # of the well-recorded species of the same genus, or of the family or order where the genus holds too
-# few, the species under test always left out, from the package's `width_priors`. The rule the models have used so far, a tenth of the
+# few, by WFO's classification as the species pool holds it, the species under test always left out, from the package's `width_priors`. The rule the models have used so far, a tenth of the
 # pool's largest width added to every width, is scored beside them as `inflation`.
 #
 # The few records are drawn three ways, since the records of a rarely collected species come from a
@@ -29,11 +29,14 @@ using DataFrames
 using Random
 using Statistics
 
-using Africa: PRIOR_MEMBERS, PRIOR_RECORDS, shrink_width, width_priors
+using AfricaPlants: PRIOR_MEMBERS, PRIOR_RECORDS, shrink_width, species_pool,
+                    width_priors, envelopes_record, wfo_authority,
+                    provide_files, table_record
 
 include("species_widths.jl")
 using .SpeciesWidths: record_windows
-using .SpeciesWidths.SpeciesTraits: load_stack, datadir, write_sidecar
+using .SpeciesWidths.SpeciesTraits: load_stack, datadir, write_sidecar,
+                                    record_table, pipeline_run
 
 # A species' width is taken as known from this many records.
 const KNOWN_RECORDS = 100
@@ -42,7 +45,8 @@ const STRENGTHS = (0.0, 0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 12.0, 20.0, 30.0, 50.0,
                    100.0,
                    1000.0)
 const ENVELOPES = get(ENV, "AFRICA_ENVELOPES",
-                      expanduser("~/git/plant_trait/data/global_plant_climate_envelopes.csv"))
+                      joinpath(datadir(), "plant_trait", "data",
+                               "global_plant_climate_envelopes.csv"))
 
 # The distance over the ground between two records, in km, flat at the scale of a species' records.
 function _apart(lat1, lon1, lat2, lon2)
@@ -82,12 +86,12 @@ end
     holdout(values, lat, lon, species, taxonomy; rng)
 
 Score every rule on one axis. `values`, `lat` and `lon` hold the axis's trusted records and
-`species` the name of each; `taxonomy` maps a name to its `(genus, family, order)`. Return the
-table of scores and how many species were tested.
+`species` the name of each; `taxonomy` maps a name to its `(genus, family, order)`, each `missing`
+where unknown. Return the table of scores and how many species were tested.
 """
 function holdout(values::Vector{Float64}, lat::Vector{Float64},
                  lon::Vector{Float64}, species::Vector{String},
-                 taxonomy::Dict{String, NTuple{3, String}};
+                 taxonomy::Dict{String, <:Tuple};
                  rng = Xoshiro(1))
     rows = Dict{String, Vector{Int}}()
     for (r, s) in enumerate(species)
@@ -151,19 +155,37 @@ function holdout(values::Vector{Float64}, lat::Vector{Float64},
 end
 
 function main()
-    records = CSV.read(joinpath(datadir(), "records_africa.csv"), DataFrame,
-                       select = [:species, :decimalLatitude, :decimalLongitude,
-                           :year, :month, :on_lattice, :near_garden,
-                           :garden_named])
-    filter!(r -> !ismissing(r.species), records)
-    println("Read ", nrow(records), " named records")
+    return pipeline_run() do handle
+        return scores(handle)
+    end
+end
+
+# The hold-out experiment's scores, written to `width_holdout.csv`: the Africa records, the widths,
+# ERA5, the envelopes and the WFO release read through the data pipeline run `handle` where there is
+# one, and the scores registered with it.
+function scores(handle)
+    input = joinpath(datadir(), "records_africa.csv")
+    table_record(input, :records_africa, handle = handle)
+    widthfile = joinpath(datadir(), "species_widths.csv")
+    table_record(widthfile, :species_widths, handle = handle)
+    envelopes_record(ENVELOPES, handle = handle)
+    records = CSV.read(input, DataFrame,
+                       select = [:wfo_species, :decimalLatitude,
+                           :decimalLongitude, :year, :month, :on_lattice,
+                           :near_garden, :garden_named])
+    filter!(r -> !ismissing(r.wfo_species), records)
+    println("Read ", nrow(records), " records of a WFO species")
     flush(stdout)
+    # The species the runs simulate, each with WFO's genus, family and order.
     envelopes = CSV.read(ENVELOPES, DataFrame,
-                         select = [:species, :genus, :family, :order])
-    taxonomy = Dict(String(r.species) => (String(r.genus), String(r.family),
-                     String(r.order))
-                    for r in eachrow(dropmissing(envelopes)))
-    era5 = joinpath(datadir(), "era5")
+                         select = [:species, :numrecords, :tmin, :tp, :ssr])
+    widths = CSV.read(widthfile, DataFrame)
+    pool = species_pool(envelopes, widths,
+                        authority = wfo_authority(handle = handle),
+                        verbosity = :silent).pool.species
+    taxonomy = Dict(String(r.name) => (r.genus, r.family, r.order)
+                    for r in eachrow(pool))
+    era5 = provide_files(handle, :era5, joinpath(datadir(), "era5"))
     windows = record_windows(records, load_stack(era5, "t2m"),
                              load_stack(era5, "tp"))
     trusted = (temperature = .!records.on_lattice,
@@ -178,7 +200,7 @@ function main()
         result = holdout(values[axis][keep],
                          Float64.(records.decimalLatitude[keep]),
                          Float64.(records.decimalLongitude[keep]),
-                         String.(records.species[keep]), taxonomy)
+                         String.(records.wfo_species[keep]), taxonomy)
         insertcols!(result.scores, 1, :axis => String(axis))
         push!(tables, result.scores)
     end
@@ -186,11 +208,12 @@ function main()
     scores = vcat(tables...)
     CSV.write(out, scores)
     write_sidecar(out,
-                  source = "records_africa.csv joined to ERA5 monthly means, with the taxonomy of the published envelopes",
+                  source = "records_africa.csv joined to ERA5 monthly means, with WFO's taxonomy of the species pool",
                   known_from_records = KNOWN_RECORDS,
                   prior_from_records = PRIOR_RECORDS,
                   prior_members = PRIOR_MEMBERS,
                   scores = "natural log of estimate over known width: rmse, median absolute value, exp(median) as bias; zero counts estimates of zero, left out of the rest")
+    record_table(out, :width_holdout, handle = handle)
     println(nrow(scores), " scores -> ", out)
     return scores
 end

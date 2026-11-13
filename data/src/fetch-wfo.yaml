@@ -1,0 +1,27 @@
+# The WFO Plant List release species names are standardised through, fetched and registered: the
+# source's deposit is the run's one input, and its outputs are the files and EcoSISTEM's provenance
+# record of each. From the root of the repository:
+#
+#     fair run data/src/fetch-wfo.yaml
+#
+# Run again with everything registered, the script stops before a code run exists.
+run_metadata:
+  description: The WFO Plant List release species names are standardised through, fetched and registered
+  default_input_namespace: WFO
+  default_output_namespace: WFO
+  script: |
+    julia --project data/src/fetch.jl wfo
+
+# The source's namespace, which is the run's own.
+register:
+- namespace: WFO
+  full_name: World Flora Online
+  website: https://www.worldfloraonline.org/
+
+write:
+- data_product: wfo/data/*
+  description: A WFO Plant List release, as its Darwin Core archive
+  file_type: zip
+- data_product: wfo/provenance/*
+  description: EcoSISTEM's provenance record of a file under wfo
+  file_type: toml

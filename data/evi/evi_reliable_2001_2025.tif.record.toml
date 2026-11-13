@@ -1,0 +1,16 @@
+bytes = 4415525
+file = "evi_reliable_2001_2025.tif"
+identifies = "data"
+key = "AfricaPlants_evi_reliable"
+namespace = "AfricaPlants"
+primary = false
+role = "abundance"
+route = "OtherOrigin"
+sha256 = "9b588ca4045d20b240b51c4fb80f18ad114b25e488818969ecdff96236ceee93"
+source = "AfricaPlants evi_reliable"
+title = "Mean MODIS EVI over the Africa box where it rests on enough months"
+writer = "EcoSISTEM.Provenancer 0.11.1"
+
+[[references]]
+doi = "10.5067/MODIS/MOD13C2.061"
+text = ""

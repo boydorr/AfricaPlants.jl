@@ -1,0 +1,23 @@
+bytes = 852013873
+file = "records_africa.csv"
+identifies = "data"
+key = "AfricaPlants_records_africa"
+licence = "cc-by-nc-4.0"
+namespace = "AfricaPlants"
+primary = false
+role = "abundance"
+route = "OtherOrigin"
+sha256 = "74aa0710a83d008588f38208d6ebc3b42cc854cd450fdae9594bde9783e31f8a"
+source = "AfricaPlants records_africa"
+title = "Plant records within Africa's outline, each with its WFO species"
+writer = "EcoSISTEM.Provenancer 0.11.1"
+
+[[references]]
+doi = "10.15468/dl.n4a2sa"
+text = ""
+[[references]]
+doi = "10.5281/zenodo.20782718"
+text = ""
+[[references]]
+doi = "10.1002/joc.5086"
+text = ""

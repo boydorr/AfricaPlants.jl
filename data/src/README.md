@@ -3,8 +3,9 @@
 Scripts that fetch and prepare every input the Africa runs need. They write under `data/`
 (gitignored, or the directory named by `AFRICA_DATADIR`), and beside each output a
 `*.provenance.toml` saying where it came from, when, and how big it is. EcoSISTEM writes those
-records for the ERA5 and 20CRv3 downloads, which go through its `fetchfiles`; the other scripts
-write their own. Each script is idempotent: a file already present is not fetched again, and a
+records for the ERA5 and 20CRv3 downloads, which go through its `fetchfiles`, and for the GBIF
+downloads and the climate envelopes, from the metadata their DOIs resolve to, so that a run's
+account of its inputs carries them; the other scripts write their own. Each script is idempotent: a file already present is not fetched again, and a
 table already built is rebuilt only with `--force`.
 
 Run them from the repository root in this order. Nothing here is run by the test suite except
@@ -12,34 +13,75 @@ the pure functions, which `test/runtests.jl` exercises on fabricated inputs.
 
 | step | script | needs | writes |
 | --- | --- | --- | --- |
-| 1 | `era5_download.jl` | a CDS account: `~/.cdsapirc`, read by CDSAPI.jl | `era5/era5_<var>_<decade>s.nc`, one variable per decade file; a decade not yet complete is `era5_<var>_<first>-<last>.nc` |
+| 1 | `era5_download.jl` | a CDS account: `~/.cdsapirc`, read by CDSAPI.jl | `era5/era5_<var>_<decade>s.nc`, one variable per decade file; a decade not yet complete is `era5_<var>_<first>-<last>.nc`; with `--through=<year>-<month>`, that year's months are `era5_<var>_<year>-<year>_m01-<month>.nc`, refused if any month is preliminary ERA5T |
 | 1b | `twentycr_download.jl` | nothing: NOAA PSL serves 20CRv3 over plain HTTPS | `twentycr/SI-MO/`, five global monthly files spanning 1806 to 2015 (2 m temperature, precipitation rate, downward and upward shortwave, soil moisture by layer), for the extension before 1940 |
 | 1c | `evi_download.jl` | a NASA Earthdata token: `EARTHDATA_TOKEN` in the environment, or `~/.earthdata_token` | `evi/MOD13C2.A<year><day>.061.<production>.hdf`, the MODIS/Terra monthly vegetation index files for 2001 to 2025, one per month, global at 0.05 degrees |
 | 1d | `evi_mean.jl` | the MOD13C2 files | `evi/evi_mean_2001_2025.nc`: the mean EVI of good and marginal months at each cell, the stand-in for how many plants a cell holds: collection effort is records over EVI, so a record in a greener or less sampled cell seeds more individuals |
-| 1e | `seeding_grid.jl` | the mean EVI layer; EarthEnv land cover, downloaded by EcoSISTEM on first use | `seeding_grid.nc`: over the Africa box at 0.05 degrees, each cell's mean EVI (missing below 36 good months), its share available to plants (every land-cover class but open water, snow and ice, and urban) and its area, the grid a record's seeding factor is computed on |
+| 1e | `evi_reliable.jl` | the mean EVI layer | `evi/evi_reliable_2001_2025.tif`: over the Africa box at 0.05 degrees, each cell's mean EVI, missing below 36 good months, as a GeoTIFF the runs read as a layer; each record's seeding weight is its cell's EVI times land area, shared among the records made there |
 | 2 | `inventory.jl` | the netCDF files | `inventory.csv`: every file's variables, unit strings, time axis, lattice |
 | 3 | `gbif_download.jl` | a GBIF account: `GBIF_USER`, `GBIF_PWD`, `GBIF_EMAIL` in the environment, or `user`, `pwd`, `email` in `~/.gbifrc` | two downloads, `gbif/era5/<key>.csv` (1940 onward, the ERA5 years) and `gbif/early/<key>.csv` (1806-1939, the years only 20CRv3 reaches), each with its DOI in its provenance |
 | 3b | `centroids.jl` | nothing: GBIF's Catalogue of Centroids on GitHub, at a pinned commit | `centroids.csv`: country centroids, which `gbif_clean.jl` drops records near |
 | 3c | `gardens.jl` | nothing: CoordinateCleaner's institutions gazetteer on GitHub, at a pinned commit | `gardens.csv`: botanic gardens, which `gbif_clean.jl` flags records near |
+| 3d | `envelopes.jl` | the EIDC's climate envelopes, downloaded by hand and unpacked into `plant_trait/` | `plant_trait/data/global_plant_climate_envelopes.csv.provenance.toml`, the table's record, naming the dataset and the paper it was made for from their DOIs; tracked, so a run looks nothing up |
 | 4 | `gbif_clean.jl` | the GBIF CSVs | `records.csv` from the `era5` download and `records_early.csv` from `early`: one row per usable record, cleaned, with three flag columns |
-| 5 | `species_traits.jl` | `records.csv`, a cached WorldClim layer to place the continent outline | `records_africa.csv`, the records the model seeds from |
-| 6 | `species_widths.jl` | `records_africa.csv`, the ERA5 `t2m` and `tp` files | `species_widths.csv`: per species name, the spread across its records of the twelve-month minimum temperature (records on the quarter-degree lattice left out) and mean precipitation (also records near or naming a botanic garden), missing below two records |
+| 5 | `species_traits.jl` | `records.csv`, a cached WorldClim layer to place the continent outline, the WFO Plant List release `AfricaPlants` names | `records_africa.csv`, the records the model seeds from, each with the WFO species its name means |
+| 6 | `species_widths.jl` | `records_africa.csv`, the ERA5 `t2m` and `tp` files | `species_widths.csv`: per WFO species, the spread across its records of the twelve-month minimum temperature (records on the quarter-degree lattice left out) and mean precipitation (also records near or naming a botanic garden), missing below two records |
 
 ```sh
 julia --project data/src/era5_download.jl    # hours, queued at the CDS; resumable; --dry-run lists
 julia --project data/src/twentycr_download.jl # about 2 GB, no credentials; extension only
 julia --project data/src/evi_download.jl     # about 29 GB, an Earthdata token; resumable
 julia --project data/src/evi_mean.jl
-julia --project data/src/seeding_grid.jl
+julia --project data/src/evi_reliable.jl
 julia --project data/src/inventory.jl
 julia --project data/src/gbif_download.jl --request-only   # submit both; GBIF emails when ready
 julia --project data/src/gbif_download.jl                  # later: wait if needed, then fetch
 julia --project data/src/centroids.jl
 julia --project data/src/gardens.jl
+julia --project data/src/envelopes.jl
 julia --project data/src/gbif_clean.jl       # every download present; or name one
 julia --project data/src/species_traits.jl
 julia --project -t auto data/src/species_widths.jl
 ```
+
+## Through the data pipeline
+
+Every script also runs as a FAIR data pipeline run, and the paper's inputs are made that way. Run
+plainly, a script registers nothing. Launched by `fair run`, it takes the run's handle, reads its
+inputs from the registry, and registers what it fetched or made. The files land where the plain
+script puts them, so the two routes give the same files.
+
+A fetch run registers one source: each of its files, with EcoSISTEM's provenance record of the file,
+in the source's own namespace. The source's deposit is the run's one input. There is a config for
+each source, `fetch-<source>.yaml`. `fetch.jl <source>` fetches the files EcoSISTEM keeps in its
+asset cache: the WFO release, Natural Earth's outlines, WorldClim's annual mean temperature and
+EarthEnv's land cover. Only the HPC's runs read EarthEnv, so its fetch run is made there. The MODIS
+files and the centroids and gardens tables keep their own sidecar as `.provenance.toml`, so
+EcoSISTEM's record of each is `<file>.record.toml`. A fetch run with everything registered already
+stops before a code run exists.
+
+A preparation run makes one table: `prepare-<step>.yaml` reads each input to where the plain script
+reads it, rebuilds the table with `--force`, and registers it and its record as
+`AfricaPlants:CaseStudy/Data/<Stem>/data/<file stem>` and `.../provenance/<file stem>`.
+
+Each run is `fair pull --local <config>`, which registers the config's namespace, then
+`fair run <config>`. The ERA5 config names the last month of final ERA5 the runs use.
+
+```sh
+for source in envelopes centroids gardens wfo naturalearth worldclim era5 gbif modis; do
+    fair pull --local data/src/fetch-$source.yaml && fair run data/src/fetch-$source.yaml
+done
+fair pull --local data/src/prepare-clean.yaml && fair run data/src/prepare-clean.yaml
+fair pull --local data/src/prepare-africa.yaml && fair run data/src/prepare-africa.yaml
+fair pull --local data/src/prepare-widths.yaml && fair run data/src/prepare-widths.yaml
+fair pull --local data/src/prepare-evimean.yaml && fair run data/src/prepare-evimean.yaml
+fair pull --local data/src/prepare-evireliable.yaml && fair run data/src/prepare-evireliable.yaml
+fair pull --local data/src/prepare-holdout.yaml && fair run data/src/prepare-holdout.yaml
+```
+
+The GBIF download, the MODIS files, the gardens and WorldClim's file are registered but not public:
+a push sends their records and not the files. Their licences or size forbid more, and only the
+preparation runs read them.
 
 ## Credentials
 
@@ -47,8 +89,9 @@ Never in the repository. The CDS key lives in `~/.cdsapirc` as the `cdsapi` clie
 GBIF username, password and the email GBIF notifies come from the environment or from
 `~/.gbifrc`, a TOML file with `user`, `pwd` and `email` lines. The NASA Earthdata token for the EVI
 files comes from `EARTHDATA_TOKEN` or from `~/.earthdata_token`, a file holding only the token and
-readable only by its owner; tokens expire after about 60 days. A script that
-cannot find its credentials says which are missing and stops before touching the network.
+readable only by its owner; tokens expire after about 60 days. A script reads its credentials only
+when it has something to fetch. One that cannot find them says which are missing and stops before
+touching the network.
 
 ## What each output is
 
@@ -74,8 +117,10 @@ cannot find its credentials says which are missing and stops before touching the
   `_FillValue`.
 - **`gbif/era5/`, `gbif/early/`**: two GBIF occurrence downloads of Plantae with coordinates in
   the Africa box, 1940 onward and 1806 to 1939, as the simple tab-separated CSV GBIF produces,
-  each with its request key and DOI. Two rather than one so that a paper built on the ERA5 years
-  alone has exactly the dataset it used to cite.
+  each with its request key and its provenance record: the file's checksum, its DOI and GBIF's
+  dated citation, the request's filter and years, and GBIF.org as the deposit it is cut from. Two
+  rather than one so that a paper built on the ERA5 years alone has exactly the dataset it used to
+  cite.
 - **`records.csv`** (from `era5`) and **`records_early.csv`** (from `early`): `gbifID,
   speciesKey, species, decimalLatitude, decimalLongitude, year, month, on_lattice, near_garden,
   garden_named` for every record with a species-level name, coordinates, a month and a year, an
@@ -96,7 +141,8 @@ cannot find its credentials says which are missing and stops before touching the
   arboretum. Regenerated rather than committed, since CoordinateCleaner is GPL-3.
 - **`records_africa.csv`**: the records of `records.csv` that fall in an active cell of a
   geographic grid cut to Natural Earth's continent-level Africa (land inside the outline), flags
-  included. This is the seeding dataset: every flagged record is kept for seeding, since a garden
+  included. `wfo_species` and `wfo_id` name the species GBIF's `species` means in the WFO Plant List,
+  resolved as the run's species pool resolves names, `missing` where WFO does not recognise it. This is the seeding dataset: every flagged record is kept for seeding, since a garden
   plant grows where it is recorded and a lattice point is close enough to place a seed in a grid
   cell. They are placed on the run's own grid at run time, since that grid is chosen then, and
   the effort raster is counted from them at the same point.

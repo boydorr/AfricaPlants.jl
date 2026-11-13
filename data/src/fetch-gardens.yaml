@@ -1,0 +1,28 @@
+# The botanic gardens cleaning flags records near, cut from CoordinateCleaner's institutions
+# gazetteer, fetched and registered: the source's deposit is the run's one input, and its outputs
+# are the files and EcoSISTEM's provenance record of each. From the root of the repository:
+#
+#     fair run data/src/fetch-gardens.yaml
+#
+# Run again with everything registered, the script stops before a code run exists.
+run_metadata:
+  description: The botanic gardens cleaning flags records near, cut from CoordinateCleaner's institutions gazetteer, fetched and registered
+  default_input_namespace: CoordinateCleaner
+  default_output_namespace: CoordinateCleaner
+  script: |
+    julia --project data/src/gardens.jl
+
+# The source's namespace, which is the run's own.
+register:
+- namespace: CoordinateCleaner
+  full_name: CoordinateCleaner
+  website: https://github.com/ropensci/CoordinateCleaner
+
+write:
+- data_product: gardens/data/*
+  description: Botanic gardens cut from CoordinateCleaner's institutions gazetteer
+  file_type: csv
+  public: false
+- data_product: gardens/provenance/*
+  description: EcoSISTEM's provenance record of a file under gardens
+  file_type: toml

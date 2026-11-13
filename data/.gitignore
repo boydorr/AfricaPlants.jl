@@ -13,5 +13,10 @@ centroids.csv
 gardens.csv
 evi/*.hdf
 evi/*.nc
+evi/*.tif
 species_widths.csv
-seeding_grid.nc
+# The EIDC's envelopes dataset as it publishes it, all but the provenance sidecar beside the table.
+plant_trait/*
+!plant_trait/data/
+plant_trait/data/*
+!plant_trait/data/*.provenance.toml

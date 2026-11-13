@@ -1,0 +1,31 @@
+# WorldClim's annual mean temperature, which positions the grid the seeding records are cut to
+# Africa's outline on, fetched and registered: the source's deposit is the run's one input, and its
+# outputs are the files and EcoSISTEM's provenance record of each. From the root of the repository:
+#
+#     fair run data/src/fetch-worldclim.yaml
+#
+# Run again with everything registered, the script stops before a code run exists.
+#
+# WorldClim's terms allow no redistribution without permission, so its file is registered but not
+# public.
+run_metadata:
+  description: WorldClim's annual mean temperature, which positions the grid the seeding records are cut to Africa's outline on, fetched and registered
+  default_input_namespace: WorldClim
+  default_output_namespace: WorldClim
+  script: |
+    julia --project data/src/fetch.jl worldclim
+
+# The source's namespace, which is the run's own.
+register:
+- namespace: WorldClim
+  full_name: WorldClim
+  website: https://www.worldclim.org/
+
+write:
+- data_product: worldclim/data/*
+  description: A WorldClim file
+  file_type: tif
+  public: false
+- data_product: worldclim/provenance/*
+  description: EcoSISTEM's provenance record of a file under worldclim
+  file_type: toml

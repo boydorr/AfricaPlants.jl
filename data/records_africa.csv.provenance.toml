@@ -1,0 +1,12 @@
+source = "records.csv within Natural Earth Africa"
+writer = "data/src/species_traits.jl"
+written = "2026-11-11T02:49:56.948"
+flagged_near_garden = 46075
+records = 7310020
+flagged_on_lattice = 30809
+bytes = 852013873
+species = 63756
+flagged_garden_named = 31200
+wfo_species = 58744
+records_with_wfo_species = 7194005
+names = "GBIF's species resolved by the WFO Plant List 2026-06"

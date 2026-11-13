@@ -1,0 +1,41 @@
+bytes = 1089348
+catalogue = "EcoSISTEM"
+citation = "Copernicus Climate Change Service (2023): ERA5 monthly averaged data on single levels from 1940 to present. Copernicus Climate Change Service (C3S) Climate Data Store (CDS). DOI: 10.24381/cds.f17050d7 (Accessed on DD-MMM-YYYY) Hersbach, H., Bell, B., Berrisford, P., Biavati, G., Horányi, A., Muñoz Sabater, J., Nicolas, J., Peubey, C., Radu, R., Rozum, I., Schepers, D., Simmons, A., Soci, C., Dee, D., Thépaut, J-N. (2023): ERA5 monthly averaged data on single levels from 1940 to present. Copernicus Climate Change Service (C3S) Climate Data Store (CDS), DOI: 10.24381/cds.f17050d7 (Accessed on DD-MMM-YYYY"
+code = "tp"
+dataset = "reanalysis-era5-single-levels-monthly-means"
+doi = "10.24381/cds.f17050d7"
+fetched = "2026-11-11T02:47:04Z"
+file = "era5_tp_2026-2026_40N25W36S56E_m01-08.nc"
+history = "2026-11-11T02:46 GRIB to CDM+CF via cfgrib-0.9.15.1/ecCodes-2.48.2 with {\"source\": \"tmpdl7w1fjk/data.grib\", \"filter_by_keys\": {\"stream\": [\"moda\"], \"stepType\": [\"avgad\"]}, \"encode_cf\": [\"parameter\", \"time\", \"geography\", \"vertical\"]}"
+job = "8e95b600-fd90-4716-94d1-a6b8c93d0286"
+licence = "CC-BY-4.0"
+primary = false
+release_date = "2019-04-18"
+request_page = "https://docs.ecojulia.org/EcoSISTEM.jl/stable/requests/#era5"
+role = "habitat"
+route = "GeneratedOnRequest"
+sha256 = "f3c0c46ff8cce6f3e0cb5f55fe86adb7e35c506a6cf61b03c1a0e32fae125628"
+source = "ERA"
+title = "ERA5 monthly averaged data on single levels, Total precipitation (era5_tp_2026-2026_40N25W36S56E_m01-08)"
+writer = "EcoSISTEM.Provenancer 0.11.1"
+
+[[notices]]
+strength = "required"
+text = "Generated using or contains modified Copernicus Climate Change Service information YYYY. Neither the European Commission nor ECMWF is responsible for any use that may be made of the Copernicus information or data it contains."
+
+[[references]]
+doi = "10.24381/cds.f17050d7"
+text = "Copernicus Climate Change Service (2023): ERA5 monthly averaged data on single levels from 1940 to present. Copernicus Climate Change Service (C3S) Climate Data Store (CDS). DOI: 10.24381/cds.f17050d7 (Accessed on DD-MMM-YYYY)"
+[[references]]
+doi = "10.24381/cds.f17050d7"
+text = "Hersbach, H., Bell, B., Berrisford, P., Biavati, G., Horányi, A., Muñoz Sabater, J., Nicolas, J., Peubey, C., Radu, R., Rozum, I., Schepers, D., Simmons, A., Soci, C., Dee, D., Thépaut, J-N. (2023): ERA5 monthly averaged data on single levels from 1940 to present. Copernicus Climate Change Service (C3S) Climate Data Store (CDS), DOI: 10.24381/cds.f17050d7 (Accessed on DD-MMM-YYYY"
+
+[request]
+area = [40.0, -25.0, -36.0, 56.0]
+data_format = "netcdf"
+download_format = "unarchived"
+month = ["01", "02", "03", "04", "05", "06", "07", "08"]
+product_type = ["monthly_averaged_reanalysis"]
+time = ["00:00"]
+variable = ["total_precipitation"]
+year = ["2026"]

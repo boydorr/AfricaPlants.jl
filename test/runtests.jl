@@ -3,17 +3,26 @@
 # Smoke test: a small synthetic species pool on the real Africa grid at the coarsest
 # resolution, run for a year. Reads WorldClim's annual mean temperature (cached after the first
 # download) to position the grid, since a study area made only of synthetic layers cannot be
-# placed by a named region.
+# placed by a named region. `Pkg.test(test_args = ["canonical"])` runs the blessing test on the real
+# data instead: see `canonical/README.md`.
 
 module TestAfrica
 
 using Test
-using Africa
+using AfricaPlants
 using EcoSISTEM
 using EcoSISTEM.Units
 using Unitful
 using Unitful.DefaultSymbols
 using RasterDataSources
+
+include(joinpath(@__DIR__, "canonical", "canonical.jl"))
+using .Canonical
+
+if "canonical" in ARGS
+    include(joinpath(@__DIR__, "canonical", "test_chain.jl"))
+    exit()
+end
 
 ENV["AFRICA_SCALE"] = "small"
 
@@ -27,6 +36,9 @@ const NUMSPECIES = 20
     @test isnothing(requested_cellsize())
     withenv("AFRICA_CELLSIZE" => "50km") do
         @test requested_cellsize() == 50.0km
+    end
+    withenv("AFRICA_CELLSIZE" => "25.0 km") do
+        @test requested_cellsize() == 25.0km
     end
     @test africa_within() isa ShapeMaskSpec
     @test africa_within().rule isa AnyOverlap
@@ -46,12 +58,16 @@ include(joinpath(DATASRC, "era5_download.jl"))
 include(joinpath(DATASRC, "twentycr_download.jl"))
 include(joinpath(DATASRC, "inventory.jl"))
 include(joinpath(DATASRC, "gbif_download.jl"))
+include(joinpath(DATASRC, "envelopes.jl"))
 include(joinpath(DATASRC, "gbif_clean.jl"))
 include(joinpath(DATASRC, "centroids.jl"))
 include(joinpath(DATASRC, "gardens.jl"))
 include(joinpath(DATASRC, "evi_download.jl"))
 include(joinpath(DATASRC, "evi_mean.jl"))
+include(joinpath(DATASRC, "evi_reliable.jl"))
 include(joinpath(DATASRC, "species_traits.jl"))
+include(joinpath(DATASRC, "species_widths.jl"))
+include(joinpath(DATASRC, "width_holdout.jl"))
 
 using NCDatasets
 using CSV
@@ -61,13 +77,16 @@ using Dates: DateTime, Month
 import Dates
 using TOML
 using Statistics
-using SparseArrays: sparse
 using DimensionalData: DimensionalData
+using Diversity: Diversity
+using EcoSISTEM.Provenancer: SourceFacts, DepositCitedApart, GeneratedOnRequest,
+                             record_provenance, writesidecar
 
 # Write a small ERA5-shaped file: `variable` over a 3 x 4 lattice for `months` consecutive months
-# from January `year0`, valued `base + t` in month t at every cell, with the CDS's own axis names
-# and a `units` attribute; `NaN` in the north-west corner throughout to stand for the sea.
-function fake_era5(path, variable, units, year0, months; base = 0.0)
+# from January `year0`, each stamped at `hour`, valued `base + t` in month t at every cell, with the
+# CDS's own axis names and a `units` attribute; `NaN` in the north-west corner throughout to stand
+# for the sea.
+function fake_era5(path, variable, units, year0, months; base = 0.0, hour = 0)
     NCDataset(path, "c") do ds
         defDim(ds, "valid_time", months)
         defDim(ds, "latitude", 3)
@@ -77,7 +96,7 @@ function fake_era5(path, variable, units, year0, months; base = 0.0)
                        "units" => "days since 1900-01-01",
                        "calendar" => "proleptic_gregorian"
                    ])
-        dates = [DateTime(year0, 1, 1) + Month(k - 1) for k in 1:months]
+        dates = [DateTime(year0, 1, 1, hour) + Month(k - 1) for k in 1:months]
         t[:] = Dates.value.(dates .- DateTime(1900, 1, 1)) ./ 86_400_000
         defVar(ds, "latitude", Float64, ("latitude",))[:] = [10.0, 9.75, 9.5]
         defVar(ds, "longitude", Float64, ("longitude",))[:] = [
@@ -102,10 +121,11 @@ end
     @test ERA5Download.last_complete_year(Dates.Date(2026, 9, 11)) == 2025
     @test ERA5Download.cdsarea() == (40, -25, -36, 56)
     dir = mktempdir()
-    requests = ERA5Download.requests(dir, lastyear = 2025)
+    requests = ERA5Download.requests(dir, through = Dates.Date(2025, 12))
     @test length(requests) == length(ERA5Download.CODES) == 4
     @test [basename(r.path) for r in requests[1]] ==
-          [["era5_t2m_$(d)s.nc" for d in 1940:10:2010]; "era5_t2m_2020-2025.nc"]
+          [["era5_t2m_$(d)s_40N25W36S56E.nc" for d in 1940:10:2010]
+           "era5_t2m_2020-2025_40N25W36S56E.nc"]
     tp = requests[2][2]
     @test tp.dataset == "reanalysis-era5-single-levels-monthly-means"
     @test tp.request["variable"] == ["total_precipitation"]
@@ -120,6 +140,23 @@ end
     dry = EcoSISTEM.fetchfiles(specs, dryrun = true)
     @test length(dry) == 4 * 9
     @test count(e -> e.present, dry) == 1
+    # A series stopping before December takes that year's months in a file of their own.
+    partial = ERA5Download.requests(dir, through = Dates.Date(2026, 8))[1]
+    @test length(partial) == 10
+    @test basename(partial[end].path) ==
+          "era5_t2m_2026-2026_40N25W36S56E_m01-08.nc"
+    @test partial[end].request["year"] == ["2026"]
+    @test length(partial[end].request["month"]) == 8
+    @test ERA5Download._through(["--through=2026-08"]) == Dates.Date(2026, 8)
+    @test ERA5Download._through(String[]) ==
+          Dates.Date(ERA5Download.last_complete_year(), 12)
+    # Each month's `expver` says whether it is final; a file without one has no preliminary months.
+    path = fake_era5(joinpath(dir, "late.nc"), "t2m", "K", 2026, 3)
+    @test isempty(ERA5Download.preliminary_months(path))
+    NCDataset(path, "a") do ds
+        return defVar(ds, "expver", ["0001", "0001", "0005"], ("valid_time",))
+    end
+    @test ERA5Download.preliminary_months(path) == [Dates.Date(2026, 3)]
 end
 
 @testset "Data scripts: 20CRv3 request" begin
@@ -137,7 +174,7 @@ end
     @test EcoSISTEM.assetpath(assets[1]) == assets[1].path
     record = provenance(assets[1].path)
     @test record.url == assets[1].url
-    @test record.dataset == "TwentyCR" && record.code == "air"
+    @test record.source == "TwentyCR" && record.code == "air"
     @test isnothing(record.fetched)
 end
 
@@ -204,6 +241,21 @@ end
     @test_throws ErrorException EVIMean.accumulate!(total, count,
                                                     zeros(Int16, 3, 2),
                                                     zeros(Int8, 3, 2))
+    # A cell resting on too few months has no reliable EVI, nor has one with no value.
+    evi = Union{Missing, Float32}[0.5 missing; 0.25 0.3]
+    reliable = EVIReliable.reliable_evi(evi, Int16[40 40; 10 36])
+    @test isequal(reliable, Float32[0.5 NaN; NaN 0.3])
+    # Written as a GeoTIFF over a box, it reads back cell for cell from the north-west corner.
+    box = (north = 1.0, west = 0.0, south = 0.9, east = 0.1)
+    path = EVIReliable.write_geotiff(joinpath(mktempdir(), "evi.tif"), reliable,
+                                     box)
+    AG = EcoSISTEM.ArchGDAL
+    AG.read(path) do ds
+        @test isequal(AG.read(AG.getband(ds, 1)), reliable)
+        @test AG.getgeotransform(ds) ≈ [0.0, 0.05, 0.0, 1.0, 0.0, -0.05]
+    end
+    @test EVIReliable.box_indices(box) ==
+          (columns = 3601:3602, rows = 1781:1782)
 end
 
 @testset "Data scripts: provenance" begin
@@ -222,6 +274,65 @@ end
     @test rec["source"] == "a test" && rec["n"] == 3 && rec["bytes"] == 2
     @test !haskey(rec, "file")
     @test !occursin(homedir(), read(Inventory.provenance_path(out), String))
+    # A script that includes another is the writer, not the one it includes: `width_holdout.jl`
+    # includes `species_widths.jl`, which includes `species_traits.jl`, where `common.jl` is. Each
+    # is included here at top level, as running it would.
+    for (writer, script) in ((EVIReliable.write_sidecar, "evi_reliable.jl"),
+        (SpeciesTraits.write_sidecar, "species_traits.jl"),
+        (SpeciesWidths.write_sidecar, "species_widths.jl"),
+        (WidthHoldout.write_sidecar, "width_holdout.jl"))
+        writer(out, source = "a test")
+        @test TOML.parsefile(Inventory.provenance_path(out))["writer"] ==
+              "data/src/" * script
+    end
+    # A GBIF download's record is EcoSISTEM's, written from the facts its DOI's metadata gives,
+    # here by hand, and a run reads it back from the sidecar alone.
+    key = "0014627-260903145123482"
+    doi = "10.15468/dl.n4a2sa"
+    @test GBIFDownload.gbif_citation(doi, Dates.Date(2026, 9, 12)) ==
+          "GBIF.org (12 September 2026) GBIF Occurrence Download https://doi.org/$doi"
+    metadata = SourceFacts(source = "Occurrence Download",
+                           title = "Occurrence Download", doi = doi,
+                           releasedate = "2026-09-12", licence = "cc-by-nc-4.0",
+                           authors = ["GBIF.org User"], identifies = :data)
+    csv = joinpath(dir, key * ".csv")
+    write(csv, "gbifID\n1\n")
+    writesidecar(csv,
+                 GBIFDownload.download_record(csv,
+                                              GBIFDownload.download_facts(metadata),
+                                              name = :era5, key = key,
+                                              url = "https://api.gbif.org/$key.zip",
+                                              fetched = false))
+    rm(csv)
+    gbif = gbif_record(csv)
+    @test gbif.role === :abundance && gbif.doi == doi &&
+          gbif.licence == "cc-by-nc-4.0" &&
+          gbif.source == "GBIF occurrence download"
+    @test gbif.citation ==
+          GBIFDownload.gbif_citation(doi, Dates.Date(2026, 9, 12))
+    @test gbif.route == GeneratedOnRequest(doi) && gbif.primary === true
+    @test gbif.title == "GBIF occurrence download $key (1940-present)"
+    @test gbif.deposit == DepositCitedApart(GBIFDownload.GBIF_ORG)
+    @test gbif.request["years"] == "1940-present" && isnothing(gbif.fetched)
+    @test_throws ErrorException gbif_record(joinpath(dir, "absent.csv"))
+    # The envelopes' record names the paper they were made for as the deposit cited apart; once
+    # written, from facts here by hand, `envelopes_record` reads it back from the dataset's DOI.
+    table = joinpath(dir, "global_plant_climate_envelopes.csv")
+    write(table, "SppID\n1\n")
+    paper = SourceFacts(source = "Strong phylogenetic signals in global plant bioclimatic envelopes",
+                        doi = AfricaPlants.ENVELOPES_PAPER_DOI,
+                        identifies = :paper, authors = ["Claire Harris"],
+                        releasedate = "2022-07-20",
+                        journal = "Global Ecology and Biogeography",
+                        volume = "31", issue = "11", pages = "2191-2203")
+    written = record_provenance(table,
+                                SourceFacts(source = "Bioclimatic envelopes for global plant species",
+                                            doi = AfricaPlants.ENVELOPES_DOI,
+                                            identifies = :data,
+                                            deposit = DepositCitedApart(paper)),
+                                role = :species)
+    @test envelopes_record(table) == written
+    @test envelopes_record(table).deposit == DepositCitedApart(paper)
 end
 
 @testset "Data scripts: inventory" begin
@@ -422,6 +533,23 @@ end
     climate = SpeciesTraits.record_climate(records, stacks)
     @test climate.tmin ≈ [283.0, 271.0, 277.0, NaN] nans = true
     @test climate.tp ≈ [mean(13:24), mean(1:12), mean(7:18), NaN] nans = true
+
+    # Widths are over the records of each WFO species: temperature leaves out a record on the
+    # lattice, and precipitation also one near a garden. One record gives no width.
+    rows = DataFrame(wfo_species = ["A a", "A a", "A a", "A a", "B b"],
+                     wfo_id = ["wfo-1", "wfo-1", "wfo-1", "wfo-1", "wfo-2"],
+                     on_lattice = [false, false, false, true, false],
+                     near_garden = [false, false, true, false, false],
+                     garden_named = falses(5),
+                     tmin = [270.0, 272.0, 274.0, 290.0, 280.0],
+                     tp = [0.001, 0.003, 0.009, 0.009, 0.002])
+    widths = SpeciesWidths.width_table(rows)
+    @test widths.species == ["A a", "B b"]
+    @test widths.wfo_id == ["wfo-1", "wfo-2"]
+    @test widths.tmin_n == [3, 1] && widths.tp_n == [2, 1]
+    @test widths.tmin_sd[1] ≈ std([270.0, 272.0, 274.0])
+    @test widths.tp_sd[1] ≈ std([0.001, 0.003])
+    @test ismissing(widths.tmin_sd[2]) && ismissing(widths.tp_sd[2])
     table = SpeciesTraits.species_table(climate)
     @test nrow(table) == 1            # B has one record with climate, below the minimum
     @test table.species == ["A a"]
@@ -466,71 +594,172 @@ end
     @test chosen.perspecies == sizeof(Int64) * length(environment.active)
     @test count(environment.active) > 0
 
-    # Kinshasa is on land; a point in the Gulf of Guinea is off the land, and one in the South
-    # Atlantic off the grid altogether.
-    places = grid_cells(environment, [-4.32, -2.0, -50.0], [15.31, 3.0, -20.0])
-    @test places[1] > 0 && places[2] == 0 && places[3] == 0
-    @test parent(environment.active)[places[1]]
-    @test grid_cells(environment, [-2.0], [3.0], active = false)[1] > 0
-    # Snapping moves a position in an inactive cell to the nearest active cell within reach.
-    snapped = grid_cells(environment, [-2.0], [3.0], snap = 50)[1]
-    @test snapped > 0 && parent(environment.active)[snapped]
-    @test grid_cells(environment, [-4.32], [15.31], snap = 3) == places[1:1]
-
-    mask = Bool[0 0 0 0; 0 0 0 1; 1 0 0 0]
-    # From (1, 1) the active (3, 1) is 2 cells away and (2, 4) 3.2: the nearer wins; out of reach, none.
-    @test Africa._nearestactive(mask, CartesianIndex(1, 1), 3) ==
-          LinearIndices(mask)[3, 1]
-    @test Africa._nearestactive(mask, CartesianIndex(1, 1), 1) == 0
-    # From (2, 2) both are about as near: (3, 1) at 2 against (2, 4) at 4 in squared distance.
-    @test Africa._nearestactive(mask, CartesianIndex(2, 2), 2) ==
-          LinearIndices(mask)[3, 1]
-
-    species = build_species(NUMSPECIES, tolerance = (295.0K, 50.0K),
-                            toleranceaxis = Temperature,
-                            demand = 10.0kJ / month_mean_duration,
-                            demandaxis = SolarRadiation, dispersal = 150.0km,
-                            abundance = 10^5, seed = 1)
-    eco = build_ecosystem(species, environment, seed = 1)
+    species = build_species(SpeciesPool(NUMSPECIES, verbosity = :silent),
+                            tolerance = ToleranceSpec(Temperature, μ = 295.0K,
+                                                      σ = 50.0K),
+                            demand = DemandSpec(SolarRadiation,
+                                                10.0kJ / month_mean_duration),
+                            movement = MovementSpec(SeedDispersal(GaussianKernel,
+                                                                  disperse_safely = true),
+                                                    meandist = 150.0km),
+                            seed = 1, verbosity = :silent)
+    eco = build_ecosystem(BySupply(total = 10^5), species, environment,
+                          seed = 1, verbosity = :silent)
+    # Blessed (`canonical/README.md`): the grid and where the build put the founders, as this run's
+    # input, then what a year makes of them.
+    canonical("smoke/active_cells", count(environment.active))
+    canonical("smoke/start_occupied",
+              count(>(0), sum(eco.abundances.matrix, dims = 1)))
     simulate!(eco, 1year - 1month_mean_duration, 1month_mean_duration)
     @test sum(eco.abundances.matrix) > 0
     @test count(>(0), sum(eco.abundances.matrix, dims = 2)) > 0
     # The totals kept for every recorded year are the landscape summed each way.
-    totals = abundance_totals(eco)
-    @test totals.species == vec(sum(eco.abundances.matrix, dims = 2))
-    @test totals.cells == vec(sum(eco.abundances.matrix, dims = 1))
-    @test sum(totals.species) == sum(totals.cells) == population(eco).total
+    totals = RecordTotals(eco, 1)
+    totals(eco, (count = 1,))
+    @test totals.species[:, 1] == vec(sum(eco.abundances.matrix, dims = 2))
+    @test totals.cells[:, 1] == vec(sum(eco.abundances.matrix, dims = 1))
+    canonical("smoke/by_species", totals.species[:, 1])
+    canonical("smoke/surviving", count(>(0), totals.species[:, 1]))
+    canonical("smoke/occupied_cells", count(>(0), totals.cells[:, 1]))
+    # A year's table holds each metacommunity measure at each order, as Diversity.jl measures it.
+    diversity = RecordDiversity(eco, 1, qs = DIVERSITY_ORDERS,
+                                metacommunity = collect(METACOMMUNITY_MEASURES))
+    diversity(eco, (count = 1,))
+    path = joinpath(mktempdir(), "diversity.csv")
+    now = record_diversity(path, "smoke", 0, totals, diversity, 1)
+    table = CSV.read(path, DataFrame)
+    @test nrow(table) ==
+          length(METACOMMUNITY_MEASURES) * length(DIVERSITY_ORDERS)
+    @test all(==(sum(eco.abundances.matrix)), table.individuals)
+    @test now.counts.alive == count(>(0), totals.species[:, 1])
+    @test now.measures.gamma ≈
+          Diversity.meta_gamma(eco, DIVERSITY_ORDERS).diversity
+    @test now.measures.norm_beta ≈
+          Diversity.norm_meta_beta(eco, DIVERSITY_ORDERS).diversity
+    @test table.diversity[table.measure .== "raw_rho"] ≈
+          Diversity.raw_meta_rho(eco, DIVERSITY_ORDERS).diversity
+    # A recorder of other measures, or in another order, is refused rather than mislabelled.
+    other = RecordDiversity(eco, 1, qs = DIVERSITY_ORDERS,
+                            metacommunity = [Diversity.Gamma])
+    @test_throws ErrorException record_diversity(path, "smoke", 0, totals,
+                                                 other, 1)
+end
+
+# A made-up WFO Plant List release, written as the Darwin Core zip a release is: one order, one family,
+# a genus per species, and a synonym among the envelopes' names and among the records'. "Z z" is a name
+# it does not hold.
+const FAKEWFO_ROWS = [
+    ("wfo-0000000400", "Plantae", "kingdom", "Accepted", "", ""),
+    ("wfo-0000000300", "Ordo", "order", "Accepted", "", "wfo-0000000400"),
+    ("wfo-0000000200", "Familia", "family", "Accepted", "", "wfo-0000000300"),
+    [("wfo-000000010$i", g, "genus", "Accepted", "", "wfo-0000000200")
+     for (i, g) in enumerate(["A", "B", "C", "D", "E"])]...,
+    ("wfo-0000000001", "A a", "species", "Accepted", "", "wfo-0000000101"),
+    ("wfo-0000000002", "A x", "species", "Synonym", "wfo-0000000001", ""),
+    ("wfo-0000000003", "B b", "species", "Accepted", "", "wfo-0000000102"),
+    ("wfo-0000000004", "B y", "species", "Synonym", "wfo-0000000003", ""),
+    ("wfo-0000000005", "C c", "species", "Accepted", "", "wfo-0000000103"),
+    ("wfo-0000000006", "D d", "species", "Accepted", "", "wfo-0000000104"),
+    ("wfo-0000000007", "E e", "species", "Accepted", "", "wfo-0000000105")]
+
+# Run `f` with the path of the made-up release, written into a temporary directory through GDAL's zip
+# file system, and remove the table EcoSISTEM caches from it afterwards, which lives in the real asset
+# cache.
+function withfakewfo(f)
+    return mktempdir() do dir
+        zip = joinpath(dir, "_DwC_backbone_R.zip")
+        header = ["taxonID", "scientificName", "scientificNameAuthorship",
+            "taxonRank", "taxonomicStatus", "acceptedNameUsageID",
+            "parentNameUsageID", "family"]
+        lines = [join(header, '\t');
+                 [join(["\"$x\""
+                        for x in (id, name, "L.", rank, status,
+                            accepted, parent, "Familia")], '\t')
+                  for (id, name, rank, status, accepted, parent) in FAKEWFO_ROWS]]
+        bytes = Vector{UInt8}(join(lines, '\n') * '\n')
+        handle = EcoSISTEM.ArchGDAL.GDAL.vsifopenl("/vsizip/" * zip *
+                                                   "/classification.csv", "wb")
+        EcoSISTEM.ArchGDAL.GDAL.vsifwritel(bytes, 1, length(bytes), handle)
+        EcoSISTEM.ArchGDAL.GDAL.vsifclosel(handle)
+        try
+            return f(zip)
+        finally
+            rm(EcoSISTEM._wfocachepath(zip), force = true)
+        end
+    end
 end
 
 @testset "The species pool" begin
-    envelopes = DataFrame(species = ["A a", "B b", "C c"],
-                          genus = ["A", "B", "C"], family = ["F", "F", "F"],
-                          order = ["O", "O", "O"],
-                          tmin = [280.0, 290.0, 300.0],
-                          tp = [0.001, 0.002, 0.003],
-                          ssr = [1.0e7, 1.5e7, 2.0e7],
-                          swvl1 = [0.1, 0.2, 0.3])
+    envelopes = DataFrame(species = ["A a", "A x", "B b", "C c", "E e"],
+                          numrecords = [10, 30, 50, 5, 7],
+                          tmin = [280.0, 284.0, 290.0, 300.0, 295.0],
+                          tp = [0.001, 0.002, 0.002, 0.003, 0.002],
+                          ssr = [1.0e7, 2.0e7, 1.5e7, 2.0e7, 1.0e7])
+    # The widths are one row per WFO species, as `species_widths.jl` writes them.
     widths = DataFrame(species = ["A a", "B b", "C c", "D d"],
-                       tmin_n = [2, 100, 1, 50],
-                       tmin_sd = [1.0, 3.0, missing, 2.0],
-                       tp_n = [2, 100, 40, 50],
-                       tp_sd = [0.0, 0.002, 0.001, 0.001])
-    built = species_pool(envelopes, widths)
-    @test built.unmatched == ["D d"]
-    # C has one record of temperature and so no width of its own there, and is kept on the prior.
-    @test built.nowidth == ["C c"]
-    @test built.pool.species == ["A a", "B b", "C c"]
-    # No group holds five well-recorded species, so the prior is the median over the well recorded:
-    # 3 K from B alone, and 0.0015 m/day from B and C. A's two records barely count against the
-    # weight of twelve, a width of zero included; B's hundred mostly keep their own.
-    @test built.pool.tmin_sd ≈ [sqrt((2 * 1.0^2 + 12 * 3.0^2) / 14), 3.0, 3.0]
-    @test built.pool.tp ≈ [1.0, 2.0, 3.0]
-    @test built.pool.tp_sd ≈
-          [sqrt(12 * 1.5^2 / 14), sqrt((100 * 2.0^2 + 12 * 1.5^2) / 112),
-        sqrt((40 * 1.0^2 + 12 * 1.5^2) / 52)]
-    # With no weight on the prior the widths are the records' own.
-    @test species_pool(envelopes, widths, strength = 0).pool.tmin_sd ≈
-          [1.0, 3.0, 3.0]
+                       tmin_n = [2, 120, 1, 50],
+                       tmin_sd = [1.0, 3.5, missing, 2.0],
+                       tp_n = [2, 120, 40, 50],
+                       tp_sd = [0.0, 0.0025, 0.001, 0.001])
+    withfakewfo() do zip
+        wfo = WFOPlantList(release = WFO_RELEASE, prefer_accepted = true,
+                           path = zip)
+        built = species_pool(envelopes, widths, authority = wfo,
+                             verbosity = :silent)
+        pool = built.pool
+        # E was never recorded in Africa and goes; D has records and no envelope, so is no species of
+        # the pool.
+        @test sort(pool.species.name) == ["A a", "B b", "C c"]
+        @test built.unmatched == ["D d"]
+        # C has one record of temperature and so no width of its own there, and is kept on the prior.
+        @test built.nowidth == ["C c"]
+        row(name) = pool.species[only(findall(==(name), pool.species.name)), :]
+        # "A x" is a synonym of "A a": the two envelopes merge, weighted by their records.
+        @test row("A a").numrecords == 40
+        @test row("A a").tmin ≈ (10 * 280.0 + 30 * 284.0) / 40
+        @test row("A a").tp ≈ (10 * 0.001 + 30 * 0.002) / 40
+        @test row("A a").ssr ≈ (10 * 1.0e7 + 30 * 2.0e7) / 40
+        # A width row under a synonym of a species with a row of its own is refused, not merged.
+        synonym = DataFrame(species = "B y", tmin_n = 20, tmin_sd = 6.0,
+                            tp_n = 20, tp_sd = 0.004)
+        @test_throws ErrorException species_pool(envelopes,
+                                                 vcat(widths, synonym),
+                                                 authority = wfo,
+                                                 verbosity = :silent)
+        @test (row("A a").genus, row("A a").family, row("A a").order) ==
+              ("A", "Familia", "Ordo")
+        # No group holds five well-recorded species, so the prior is the median over the well
+        # recorded: B alone for temperature, B and C for rain. A's two records barely count against
+        # the weight of twelve, a width of zero included; B's hundred and twenty mostly keep their
+        # own.
+        tprior = row("B b").tmin_sd
+        rprior = (row("B b").tp_sd + 0.001) / 2
+        @test row("A a").tmin_width ≈ shrink_width(1.0, 2, tprior, 12)
+        @test row("B b").tmin_width ≈ tprior
+        @test row("C c").tmin_width ≈ tprior
+        @test row("A a").tp_width ≈ shrink_width(0.0, 2, rprior, 12)
+        @test row("C c").tp_width ≈ shrink_width(0.001, 40, rprior, 12)
+        # With no weight on the prior the widths are the records' own.
+        unshrunk = species_pool(envelopes, widths, strength = 0,
+                                authority = wfo,
+                                verbosity = :silent).pool.species
+        @test unshrunk.tmin_width[unshrunk.name .== "A a"] ≈ [1.0]
+
+        # A record's name gives the species it means to WFO, a synonym its accepted name; a name
+        # WFO does not hold, or none, gives none.
+        named = SpeciesTraits.wfo_species(["B y", "A a", "Z z", missing],
+                                          authority = wfo)
+        @test isequal(named.species, ["B b", "A a", missing, missing])
+        @test isequal(named.id,
+                      ["wfo-0000000003", "wfo-0000000001", missing, missing])
+
+        species = africa_species(pool, density = 4.0 / m^2, seed = 3,
+                                 verbosity = :silent)
+        @test species.names == pool.species.name
+        again = africa_species(pool, density = 4.0 / m^2, seed = 3,
+                               verbosity = :silent)
+        @test string(species.movement) == string(again.movement)
+    end
 
     # A species takes the median of its well-recorded relatives, itself left out, from the first
     # level with enough of them: species 1 from its genus, species 3 - whose genus holds only
@@ -548,11 +777,6 @@ end
     @test priors.depth == [3, 3, 1, 2]
     @test shrink_width(0.0, 2, 3.0, 12) ≈ sqrt(12 * 9 / 14)
     @test shrink_width(2.0, 5, 3.0, 0) ≈ 2.0
-
-    species = africa_species(built.pool, density = 4.0 / m^2, seed = 3)
-    @test species.names == ["A a", "B b", "C c"]
-    again = africa_species(built.pool, density = 4.0 / m^2, seed = 3)
-    @test species.movement.kernels[1].dist == again.movement.kernels[1].dist
 end
 
 @testset "Density widths" begin
@@ -561,24 +785,42 @@ end
     # Each width is written as a literal, so it is held to the pool it was worked out from wherever
     # that data is to hand: `sqrt(2 pi)` times the geometric mean of the pool's tolerance widths,
     # which puts a species of typical breadth at a suitability of one at its optimum.
-    widths_file = joinpath(pkgdir(Africa), "data", "species_widths.csv")
+    widths_file = joinpath(pkgdir(AfricaPlants), "data", "species_widths.csv")
     envelopes_file = get(ENV, "AFRICA_ENVELOPES",
-                         expanduser("~/git/plant_trait/data/global_plant_climate_envelopes.csv"))
+                         joinpath(pkgdir(AfricaPlants), "data", "plant_trait",
+                                  "data", "global_plant_climate_envelopes.csv"))
     if isfile(widths_file) && isfile(envelopes_file)
         pool = species_pool(CSV.read(envelopes_file, DataFrame),
-                            CSV.read(widths_file, DataFrame)).pool
+                            CSV.read(widths_file, DataFrame),
+                            verbosity = :silent).pool.species
         typical(widths) = sqrt(2pi) * exp(sum(log, widths) / length(widths))
         @test ustrip(K, EcoSISTEM.densitywidth(AnnualMinimumTemperature)) ≈
-              typical(pool.tmin_sd) rtol=0.05
+              typical(pool.tmin_width) rtol=0.05
+        # The widths are in m/day, the axis in mm/day.
         @test ustrip(mm / Unitful.d,
                      EcoSISTEM.densitywidth(AnnualMeanPrecipitation)) ≈
-              typical(pool.tp_sd) rtol=0.05
+              typical(1000 .* pool.tp_width) rtol=0.05
     else
         @test_skip "the species widths and envelopes are not on this machine"
     end
 end
 
 @testset "Climate timing" begin
+    # A backwards run starts at the month every variable it reads ends in, the last file's. An
+    # accumulated variable's months are stamped at 06:00, which is the same month.
+    dir = mktempdir()
+    for (code, hour) in (("t2m", 0), ("tp", 6), ("ssr", 6))
+        fake_era5(joinpath(dir, "era5_$(code)_1940s.nc"), code, "x", 1940, 12,
+                  hour = hour)
+        fake_era5(joinpath(dir, "era5_$(code)_1941_m01-08.nc"), code, "x",
+                  1941, 8, hour = hour)
+    end
+    @test era5_last_month(dir) == (year = 1941, month = 8)
+    rm(joinpath(dir, "era5_tp_1941_m01-08.nc"))
+    @test_throws ErrorException era5_last_month(dir)
+    @test era5_last_month(dir, codes = ("t2m", "ssr")) ==
+          (year = 1941, month = 8)
+
     # A two-year monthly stack whose value is its month's ordinal, on real month starts.
     dates = [DateTime(1940, 1, 1) + Month(k - 1) for k in 1:24]
     values = reshape(repeat(1.0:24.0, inner = 4), 2, 2, 24) .* K
@@ -588,30 +830,43 @@ end
                                                               DimensionalData.X(1:2),
                                                               DimensionalData.Ti(dates))),
                                     "t2m")
-    @test Africa._retime(stack, ForwardClimate()) === stack
-    reversed = Africa._retime(stack, ReversedClimate())
+    @test AfricaPlants._retime(stack, ForwardClimate()) === stack
+    reversed = AfricaPlants._retime(stack, ReversedClimate())
     @test reversed.array[1, 1, :] == (24.0:-1.0:1.0) .* K
     @test DimensionalData.lookup(reversed.array, DimensionalData.Ti) ==
           (0:23) .* 1.0month_mean_duration
-    held = Africa._retime(stack, HeldClimateYear(1941))
-    @test held.array[2, 2, :] == (13.0:24.0) .* K
+    # A climatology averages each calendar month over its years: month k of 1940 and 1941 is k + 6.
+    held = AfricaPlants._retime(stack, HeldClimatology(1940:1941))
+    @test held.array[2, 2, :] ≈ (7.0:18.0) .* K
     @test DimensionalData.lookup(held.array, DimensionalData.Ti) ==
           (1:12) .* 1.0month_mean_duration
-    @test_throws ErrorException Africa._retime(stack, HeldClimateYear(1942))
+    @test AfricaPlants._retime(stack, HeldClimatology(1941:1941)).array[1, 1,
+                                                                        :] ==
+          (13.0:24.0) .* K
+    @test_throws ErrorException AfricaPlants._retime(stack,
+                                                     HeldClimatology(1941:1942))
     # The least of the twelve months to each, the first eleven taking the first full twelve.
-    least = Africa._summarised(stack, TrailingMinimum())
+    least = AfricaPlants._summarised(stack, TrailingMinimum())
     @test least.array[1, 1, :] == vcat(fill(1.0, 12), 2.0:13.0) .* K
-    average = Africa._summarised(stack, TrailingMean())
+    average = AfricaPlants._summarised(stack, TrailingMean())
     @test average.array[2, 1, :] ≈ vcat(fill(6.5, 12), 7.5:18.5) .* K
-    @test Africa._summarised(stack, MonthlyValue()) === stack
-    # A reversed run passes the same summaries backwards, and a held year is one value throughout.
-    back = Africa._laidout(stack, TrailingMinimum(), ReversedClimate())
+    @test AfricaPlants._summarised(stack, MonthlyValue()) === stack
+    # A reversed run passes the same summaries backwards, and a climatology averages them: what a
+    # forward run meets each month, not the summary of the averaged months. The least of month k's
+    # twelve is 1 in 1940 and k + 1 in 1941, so their average is (k + 2) / 2, where the least of the
+    # averaged months would be 7 throughout.
+    back = AfricaPlants._laidout(stack, TrailingMinimum(), ReversedClimate())
     @test parent(back.array)[1, 1, :] ==
           reverse(parent(least.array)[1, 1, :])
-    year = Africa._laidout(stack, TrailingMean(), HeldClimateYear(1941))
-    @test all(year.array[1, 1, :] .≈ 18.5K)
+    year = AfricaPlants._laidout(stack, TrailingMinimum(),
+                                 HeldClimatology(1940:1941))
+    @test year.array[1, 1, :] ≈ ((3.0:14.0) ./ 2) .* K
+    @test AfricaPlants._laidout(stack, TrailingMean(),
+                                HeldClimatology(1941:1941)).array[1, 1, :] ≈
+          (7.5:18.5) .* K
     @test DimensionalData.lookup(year.array, DimensionalData.Ti) ==
           (1:12) .* 1.0month_mean_duration
+    @test HELD_DECADE == FIRST_FULL_YEAR:(FIRST_FULL_YEAR + 9)
     # A cell with no data, as the sea is, stays without it and does not stop the rest.
     holed = copy(values)
     holed[1, 2, :] .= NaN * K
@@ -619,62 +874,22 @@ end
                                   DimensionalData.DimArray(holed,
                                                            DimensionalData.dims(stack.array)),
                                   "t2m")
-    drowned = Africa._summarised(sea, TrailingMinimum())
+    drowned = AfricaPlants._summarised(sea, TrailingMinimum())
     @test all(isnan, drowned.array[1, 2, :])
     @test drowned.array[1, 1, :] == least.array[1, 1, :]
     # A shorter run of months is summarised over what there is.
-    @test Africa._summarised(stack, TrailingMean(3)).array[1, 1, 1:4] ≈
+    @test AfricaPlants._summarised(stack, TrailingMean(3)).array[1, 1, 1:4] ≈
           [2.0, 2.0, 2.0, 3.0] .* K
     # Reversing twice returns the original slices.
-    twice = Africa._retime(Africa._retime(stack, ReversedClimate()),
-                           ReversedClimate())
+    twice = AfricaPlants._retime(AfricaPlants._retime(stack, ReversedClimate()),
+                                 ReversedClimate())
     @test parent(twice.array) == parent(stack.array)
 end
 
-@testset "Filling to capacity" begin
-    counts = [2 0 1; 6 0 0]
-    # Cell 1: space for 12 at a mean demand of 1 m^2, light for 25.6 at a mean of 0.25 x 1 + 0.75 x
-    # 0.5 kJ/day, so space binds and the shares of 1:3 fill 12. Cell 3 holds species 1 only and
-    # its light, at 1 kJ/day each, binds at 4.
-    supply = ([12.0, 5.0, 100.0] .* m^2, [16.0, 5.0, 4.0] .* kJ / Unitful.d)
-    demand = ([1.0, 1.0] .* m^2, [1.0, 0.5] .* kJ / Unitful.d)
-    filled = fill_to_capacity(sparse(counts), supply, demand)
-    @test filled.species == [1, 2, 1]
-    @test filled.cell == [1, 1, 3]
-    @test filled.count == [3, 9, 4]
-    # The same fact in other units fills the same.
-    @test fill_to_capacity(sparse(counts),
-                           (supply[1], uconvert.(J / Unitful.d, supply[2])),
-                           demand) == filled
-end
-
-@testset "Seeding scale" begin
-    area = fill(1.0e6m^2, 2, 2)
-    evi = [0.5 0.25; NaN 0.0]
-    fraction = [1.0 0.5; 1.0 1.0]
-    # Two cells carry vegetation: 0.5 x 1e6 and 0.25 x 0.5 x 1e6, together 0.625e6 m^2.
-    c = seeding_scale(evi, fraction, area, 2.5e6m^2)
-    @test c ≈ 4.0 / m^2
-    @test seeding_scale(evi, fraction, area, 2.5e6m^2, density = 2.0 / m^2) ≈
-          8.0 / m^2
-    # A cell that alone held every record would seed the whole of its share of the land.
-    records = [2 1; 3 0]
-    factors = seeding_factors(c, evi, fraction, area, records)
-    @test factors[1, 1] ≈ 1.0e6
-    @test factors[1, 2] ≈ 0.5e6
-    # No EVI, or none worth the name, seeds only the records themselves; no records, nothing.
-    @test factors[2, 1] == 1.0
-    @test isnan(factors[2, 2])
-    @test sum(filter(!isnan, factors) .* [2, 3, 1]) ≈ 2.5e6 + 3
-    @test seeding_factors(c, [1.0e-9;;], [1.0;;], [1.0m^2;;], [5;;]) == [1.0;;]
-    @test_throws ErrorException seeding_scale([NaN;;], [1.0;;], [1.0m^2;;],
-                                              1.0m^2)
-
+@testset "Seeding" begin
     # A record in the burn-in's first month is at elapsed zero; one after it is before the run.
-    @test months_back([2025, 2026, 1940], [12, 1, 1]) == [0, -1, 1031]
-    # Without a floor the factors are the scale's own shares, and a cell with no EVI seeds nothing.
-    raw = seeding_factors(c, evi, fraction, area, records, floor = 0.0)
-    @test raw[1, 1] ≈ 1.0e6 && raw[2, 1] == 0.0 && isnan(raw[2, 2])
+    @test months_back([2025, 2026, 1940], [12, 1, 1],
+                      start = (year = 2025, month = 12)) == [0, -1, 1031]
 
     # One scale takes relative factors to a chosen total, each still seeding at least one.
     scaled = scale_to_total([2.0, 1.0, 0.0], 10.0)
@@ -683,14 +898,18 @@ end
     @test scale_to_total([2.0, 1.0], 1.5).counts == [1.0, 1.0]
     @test scale_to_total([2.0, 1.0], 1.5).scale == 0.0
 
-    # A record counts fully at the start and halves for each half-life before it.
-    @test recency_weight(0.0year) == 1.0
-    @test recency_weight(-1.0year) == 1.0
-    @test recency_weight(40.0year) ≈ 0.25
-    @test recency_weight(10.0year, halflife = 10.0year) ≈ 0.5
-
-    grid = (lon = [0.025, 0.075], lat = [0.075, 0.025])
-    @test fine_cells([0.07, 0.01, 1.0], [0.01, 0.07, 0.0], grid) == [1, 4, 0]
+    # The weight layer over the real data, where it is to hand: an area in every cell with reliable
+    # EVI, at most the cell's own area, and its continental total close to the EVI over the land.
+    tif = joinpath(pkgdir(AfricaPlants), "data", "evi",
+                   "evi_reliable_2001_2025.tif")
+    if isfile(tif)
+        layer = seeding_layer(tif)
+        amounts = filter(isfinite, ustrip.(km^2, parent(layer.matrix)))
+        @test !isempty(amounts) && all(>=(0), amounts)
+        # A 0.05 degree cell is at most about 31 km^2, and EVI at most one.
+        @test maximum(amounts) < 31
+        @test WeightPerCell(layer, novalue = 0.0km^2) isa WeightPerCell
+    end
 end
 
 end

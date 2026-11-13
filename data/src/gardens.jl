@@ -11,7 +11,9 @@
 # Herbariorum and Botanic Gardens Conservation International) and keeps every botanic garden in it:
 # the rows typed as one, and the rows of any other type whose name says it is one. Writes
 # `gardens.csv` with `name, type, country, source, latitude, longitude`. CoordinateCleaner is GPL-3,
-# so the table is regenerated rather than committed.
+# so the table is regenerated rather than committed. EcoSISTEM's record of the table, as a file cut
+# from the gazetteer, is `gardens.csv.record.toml`. Launched by `fair run` from `fetch-gardens.yaml`,
+# the script also registers the table and its record under `gardens`.
 
 module Gardens
 
@@ -26,6 +28,22 @@ include("common.jl")
 
 const COMMIT = "24706b5d9ac928fd3331a0cff9572caa7f575885"
 const URL = "https://raw.githubusercontent.com/ropensci/CoordinateCleaner/$COMMIT/data/institutions.rda"
+
+"""
+    FACTS
+
+What is known of CoordinateCleaner's institutions gazetteer at the pinned commit, dated by that
+commit, which a table cut from it is recorded with.
+"""
+const FACTS = Provenancer.SourceFacts(source = "CoordinateCleaner institutions gazetteer",
+                                      title = "CoordinateCleaner institutions gazetteer",
+                                      url = "https://github.com/ropensci/CoordinateCleaner/tree/$COMMIT",
+                                      releasedate = "2023-08-31",
+                                      licence = "GPL-3.0-only",
+                                      identifies = :data,
+                                      key = "coordinatecleaner",
+                                      references = [(doi = "10.1111/2041-210X.13152",
+                                                     text = "")])
 
 # A name that says the institution is a botanic garden or an arboretum, in the languages the
 # gazetteer's names are written in. Deliberately narrower than "botan" or "garden", which would take
@@ -57,13 +75,27 @@ function botanic_gardens(institutions::DataFrame)
                      longitude = Float64.(rows.decimalLongitude))
 end
 
+# Where EcoSISTEM's record of a table is kept, beside the script's own sidecar.
+ecorecord_path(path::AbstractString) = path * ".record.toml"
+
+# EcoSISTEM's record of the table at `out`, as a file cut from the gazetteer, registered under
+# `gardens` with the data pipeline run `fair run` launched the script in, where it did.
+function record(out::AbstractString)
+    Provenancer.record_provenance(out, FACTS, role = :abundance,
+                                  route = Provenancer.OtherOrigin(),
+                                  sidecar = ecorecord_path(out))
+    return pipeline_register([out], :gardens, sidecar = ecorecord_path)
+end
+
 function main(argv)
     out = joinpath(datadir(), "gardens.csv")
     if isfile(out) && !forced(argv)
         println("Already have ", out,
                 "; nothing to do (use --force to rebuild).")
+        record(out)
         return nothing
     end
+    rm(ecorecord_path(out), force = true)
     # RData picks its reader by the file's extension, so the download keeps its own name.
     tmp = joinpath(mktempdir(), "institutions.rda")
     println("Fetching ", URL, " ...")
@@ -78,6 +110,7 @@ function main(argv)
                   named_as_garden = nrow(table) - typed,
                   licence = "GPL-3 (CoordinateCleaner)",
                   citation = "Zizka et al. (2019) CoordinateCleaner: standardized cleaning of occurrence records from biological collection databases. Methods in Ecology and Evolution 10:744-751, doi:10.1111/2041-210X.13152")
+    record(out)
     println(nrow(table), " botanic gardens (", typed, " typed as gardens, ",
             nrow(table) - typed, " by name) -> ", out)
     return nothing

@@ -7,7 +7,7 @@
 # | `AFRICA_SCALE`      | `large`  | `small` for a smoke test: coarsest grid, few species; `medium` for a trial: coarsest grid, a sample of the species, the full span |
 # | `AFRICA_CELLSIZE`   | chosen   | `50km` to override the memory-based choice           |
 #
-# Read at call time, not at load time, so a test can set them after `using Africa`.
+# Read at call time, not at load time, so a test can set them after `using AfricaPlants`.
 
 """
     smallscale()
@@ -40,7 +40,7 @@ const SCALED_SPECIES = (small = 200, medium = 3000)
 The grid resolutions a run may choose between, finest first. What each costs is asked of
 EcoSISTEM at run time (see [`perspecies_bytes`](@ref)), never written down here.
 """
-const CANDIDATE_CELLSIZES = (5.0km, 10.0km, 20.0km, 50.0km, 100.0km)
+const CANDIDATE_CELLSIZES = (5.0km, 10.0km, 20.0km, 25.0km, 50.0km, 100.0km)
 
 """
     requested_cellsize()

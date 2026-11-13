@@ -1,0 +1,33 @@
+# The mean MODIS EVI of each cell over its good and marginal months, 2001 to 2025, as a preparation
+# run: its inputs are read from the registry where the plain script reads them, and the table it
+# writes is registered with its provenance record. From the root of the repository:
+#
+#     fair run data/src/prepare-evimean.yaml
+run_metadata:
+  description: The mean MODIS EVI of each cell over its good and marginal months, 2001 to 2025
+  default_input_namespace: AfricaPlants
+  default_output_namespace: AfricaPlants
+  script: |
+    julia --project data/src/evi_mean.jl --force
+
+register:
+- namespace: AfricaPlants
+  full_name: AfricaPlants
+  website: https://github.com/boydorr/AfricaPlants.jl
+
+# Each source's files and records in its own namespace, and each table of ours in this one.
+read:
+- data_product: modis/data/*
+  use:
+    namespace: LPDAAC
+- data_product: modis/provenance/*
+  use:
+    namespace: LPDAAC
+
+write:
+- data_product: CaseStudy/Data/EVIMean/data/*
+  description: Mean MODIS EVI of good and marginal months, 2001 to 2025
+  file_type: nc
+- data_product: CaseStudy/Data/EVIMean/provenance/*
+  description: EcoSISTEM's provenance record of the table
+  file_type: toml

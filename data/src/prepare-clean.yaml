@@ -1,0 +1,45 @@
+# The GBIF download cleaned of records at country centroids and under glass, the rest flagged, as a
+# preparation run: its inputs are read from the registry where the plain script reads them, and the
+# table it writes is registered with its provenance record. From the root of the repository:
+#
+#     fair run data/src/prepare-clean.yaml
+run_metadata:
+  description: The GBIF download cleaned of records at country centroids and under glass, the rest flagged
+  default_input_namespace: AfricaPlants
+  default_output_namespace: AfricaPlants
+  script: |
+    julia --project data/src/gbif_clean.jl era5 --force
+
+register:
+- namespace: AfricaPlants
+  full_name: AfricaPlants
+  website: https://github.com/boydorr/AfricaPlants.jl
+
+# Each source's files and records in its own namespace, and each table of ours in this one.
+read:
+- data_product: gbif/data/*
+  use:
+    namespace: GBIF
+- data_product: gbif/provenance/*
+  use:
+    namespace: GBIF
+- data_product: centroids/data/*
+  use:
+    namespace: GBIF
+- data_product: centroids/provenance/*
+  use:
+    namespace: GBIF
+- data_product: gardens/data/*
+  use:
+    namespace: CoordinateCleaner
+- data_product: gardens/provenance/*
+  use:
+    namespace: CoordinateCleaner
+
+write:
+- data_product: CaseStudy/Data/Records/data/*
+  description: Cleaned GBIF plant records over the Africa box
+  file_type: csv
+- data_product: CaseStudy/Data/Records/provenance/*
+  description: EcoSISTEM's provenance record of the table
+  file_type: toml

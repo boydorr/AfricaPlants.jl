@@ -139,6 +139,16 @@ function main(argv)
                 "; nothing to do (use --force to rebuild).")
         return nothing
     end
+    return pipeline_run() do handle
+        return average(out, handle)
+    end
+end
+
+# The mean EVI written to `out`: the monthly files read through the data pipeline run `handle` where
+# there is one, and the mean registered with it.
+function average(out::AbstractString, handle)
+    dir = AfricaPlants.provide_files(handle, :modis, dirname(out),
+                                     sidecar = EVIDownload.ecorecord_path)
     names = filter(f -> startswith(f, "MOD13C2.A") && endswith(f, ".hdf"),
                    readdir(dir))
     first, last = EVIDownload.FIRST_MONTH, EVIDownload.LAST_MONTH
@@ -160,6 +170,7 @@ function main(argv)
                   files = names,
                   reliability_kept = "0 (good) and 1 (marginal)",
                   cells_without_a_month = count(==(0), result.months))
+    record_table(out, :evi_mean, handle = handle)
     println("wrote ", out)
     return nothing
 end

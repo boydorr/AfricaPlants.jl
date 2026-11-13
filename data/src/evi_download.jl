@@ -9,7 +9,9 @@
 # The list of files comes from NASA's public catalogue (CMR), which needs no login; the files need a
 # NASA Earthdata token, read from `EARTHDATA_TOKEN` or `~/.earthdata_token` and sent as a bearer
 # token. A file already present is not fetched again, an interrupted one resumes from its part file,
-# and each gets a provenance sidecar with its URL and checksum. Writes under `$AFRICA_DATADIR/evi/`.
+# and each gets a provenance sidecar with its URL and checksum, and EcoSISTEM's record of it from the
+# dataset's DOI as `<file>.record.toml`. Writes under `$AFRICA_DATADIR/evi/`. Launched by `fair run`
+# from `fetch-modis.yaml`, it also registers every file and its record under `modis`.
 
 module EVIDownload
 
@@ -180,6 +182,9 @@ function fetch_granule(url::AbstractString, path::AbstractString,
     end
 end
 
+# Where EcoSISTEM's record of a granule is kept, beside the script's own sidecar.
+ecorecord_path(path::AbstractString) = path * ".record.toml"
+
 # The provenance sidecar of one fetched granule.
 function _record(path::AbstractString, granule)
     return write_sidecar(path, source = "NASA LP DAAC, MOD13C2 v061",
@@ -203,7 +208,7 @@ function main(argv)
         path = joinpath(dir, g.name)
         (isfile(path) && !isfile(provenance_path(path))) && _record(path, g)
     end
-    tok = token()
+    tok = isempty(todo) ? nothing : token()
     for (k, g) in enumerate(todo)
         path = joinpath(dir, g.name)
         print("  [", k, "/", length(todo), "] ", g.name, " ...")
@@ -213,6 +218,23 @@ function main(argv)
         println(" ", round(filesize(path) / 2^20, digits = 1), " MiB")
         flush(stdout)
     end
+    unrecorded = filter(g -> !isfile(ecorecord_path(joinpath(dir, g.name))),
+                        granules)
+    if !isempty(unrecorded)
+        facts = Provenancer.SourceFacts(Provenancer.lookup_doi(DOI))
+        for g in unrecorded
+            path = joinpath(dir, g.name)
+            # Each file is a source of its own to the registry, so each has a title of its own.
+            Provenancer.record_provenance(path, facts, role = :abundance,
+                                          url = g.url,
+                                          title = facts.title * ", " *
+                                                  Dates.format(g.month,
+                                                               "yyyy-mm"),
+                                          sidecar = ecorecord_path(path))
+        end
+    end
+    pipeline_register([joinpath(dir, g.name) for g in granules], :modis,
+                      sidecar = ecorecord_path)
     return nothing
 end
 

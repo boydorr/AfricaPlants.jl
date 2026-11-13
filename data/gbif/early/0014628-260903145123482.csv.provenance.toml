@@ -1,9 +1,27 @@
-source = "GBIF occurrence download 0014628-260903145123482 (early)"
 bytes = 389573014
+citation = "GBIF.org (12 September 2026) GBIF Occurrence Download https://doi.org/10.15468/dl.4guss6"
+deposit = "DepositCitedApart"
 doi = "10.15468/dl.4guss6"
-citation = "GBIF.org (2026) GBIF Occurrence Download https://doi.org/10.15468/dl.4guss6"
+file = "0014628-260903145123482.csv"
+licence = "cc-by-nc-4.0"
+primary = true
+release_date = "2026-09-12"
+role = "abundance"
+route = "GeneratedOnRequest"
+route_identifier = "10.15468/dl.4guss6"
+sha256 = "4f3d4548bfe4ad0d2b67b384090a624941dfc1d6c99652fa74f7701609157a20"
+source = "GBIF occurrence download"
+title = "GBIF occurrence download 0014628-260903145123482 (1806-1939)"
+url = "https://api.gbif.org/v1/occurrence/download/request/0014628-260903145123482.zip"
+writer = "EcoSISTEM.Provenancer 0.10.1"
+
+[deposit_source]
+identifies = "other"
+key = "gbif"
+source = "GBIF.org"
+title = "GBIF Home Page"
+url = "https://www.gbif.org"
+
+[request]
 filter = """{\n  \"type\": \"and\",\n  \"predicates\": [\n    {\"type\": \"equals\", \"key\": \"KINGDOM_KEY\", \"value\": \"6\"},\n    {\"type\": \"equals\", \"key\": \"HAS_COORDINATE\", \"value\": \"true\"},\n    {\"type\": \"equals\", \"key\": \"HAS_GEOSPATIAL_ISSUE\", \"value\": \"false\"},\n    {\"type\": \"equals\", \"key\": \"OCCURRENCE_STATUS\", \"value\": \"PRESENT\"},\n    {\"type\": \"greaterThanOrEquals\", \"key\": \"YEAR\", \"value\": \"1806\"},\n    {\"type\": \"lessThanOrEquals\", \"key\": \"YEAR\", \"value\": \"1939\"},\n      {\"type\": \"within\", \"geometry\": \"POLYGON((-25.0 -36.0, 56.0 -36.0, 56.0 40.0, -25.0 40.0, -25.0 -36.0))\"}\n  ]\n}"""
-written = "2026-09-12T20:59:24.586"
 years = "1806-1939"
-license = "http://creativecommons.org/licenses/by-nc/4.0/legalcode"
-writer = "data/src/gbif_download.jl"

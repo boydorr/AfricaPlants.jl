@@ -1,0 +1,13 @@
+source = "evi/evi_mean_2001_2025.nc"
+bytes = 4415525
+min_evi_months = 36
+cells_with_evi = 1238289
+written = "2026-11-11T04:25:18.507"
+cells = 2462400
+writer = "data/src/evi_reliable.jl"
+
+[box]
+east = 56.0
+west = -25.0
+north = 40.0
+south = -36.0

@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 #
-# The niche widths of the Africa species: for each species in `records_africa.csv`, the standard
+# The niche widths of the Africa species: for each WFO species of `records_africa.csv`, the standard
 # deviation across its records of the twelve-month climate at each record, one width per tolerance
-# axis, each over the records that axis trusts.
+# axis, each over the records that axis trusts. A species' records are those whose name WFO resolves
+# to it, synonyms included.
 #
 #     julia --project -t auto data/src/species_widths.jl [--force]
 #
@@ -19,9 +20,11 @@ using CSV
 using DataFrames
 using Statistics
 
+using AfricaPlants: provide_files, table_record
+
 include("species_traits.jl")
 using .SpeciesTraits: load_stack, window_summary, datadir, forced,
-                      write_sidecar
+                      write_sidecar, record_table, pipeline_run
 
 const MIN_RECORDS = 2
 
@@ -57,20 +60,21 @@ end
 """
     width_table(records)
 
-Group `records`, which carry `species`, the flags `on_lattice`, `near_garden` and `garden_named`,
-and the window summaries `tmin` and `tp`, by species name, and return one row per name: `species,
-tmin_n, tmin_sd, tp_n, tp_sd`. A name is the unit the published envelopes are keyed on, so records
-GBIF files under several keys of one name are pooled. Temperature widths leave out records on the
-lattice; precipitation widths also leave out records near or naming a garden.
+Group `records`, which carry `wfo_species` and `wfo_id`, the flags `on_lattice`, `near_garden` and
+`garden_named`, and the window summaries `tmin` and `tp`, by WFO species, and return one row per
+species: `species`, its WFO name, `wfo_id`, `tmin_n`, `tmin_sd`, `tp_n` and `tp_sd`. Temperature
+widths leave out records on the lattice; precipitation widths also leave out records near or naming
+a garden.
 """
 function width_table(records::DataFrame)
-    grouped = groupby(records, :species)
+    grouped = groupby(records, [:wfo_species, :wfo_id])
     table = combine(grouped) do g
         temperature = _width(g.tmin, .!g.on_lattice)
         rain = _width(g.tp, .!(g.on_lattice .| g.near_garden .| g.garden_named))
         return (tmin_n = temperature.n, tmin_sd = temperature.sd,
                 tp_n = rain.n, tp_sd = rain.sd)
     end
+    rename!(table, :wfo_species => :species)
     return sort!(table, :species)
 end
 
@@ -81,11 +85,21 @@ function main(argv)
                 "; nothing to do (use --force to rebuild).")
         return nothing
     end
-    records = CSV.read(joinpath(datadir(), "records_africa.csv"), DataFrame)
-    filter!(r -> !ismissing(r.species), records)
-    println("Read ", nrow(records), " named records")
+    return pipeline_run() do handle
+        return widths(out, handle)
+    end
+end
+
+# The niche widths per WFO species, written to `out`: the Africa records and ERA5 read through the
+# data pipeline run `handle` where there is one, and the table registered with it.
+function widths(out::AbstractString, handle)
+    input = joinpath(datadir(), "records_africa.csv")
+    table_record(input, :records_africa, handle = handle)
+    records = CSV.read(input, DataFrame)
+    filter!(r -> !ismissing(r.wfo_species), records)
+    println("Read ", nrow(records), " records of a WFO species")
     flush(stdout)
-    era5 = joinpath(datadir(), "era5")
+    era5 = provide_files(handle, :era5, joinpath(datadir(), "era5"))
     windows = record_windows(records, load_stack(era5, "t2m"),
                              load_stack(era5, "tp"))
     records.tmin = windows.tmin
@@ -93,7 +107,7 @@ function main(argv)
     table = width_table(records)
     CSV.write(out, table)
     write_sidecar(out,
-                  source = "records_africa.csv joined to ERA5 monthly means",
+                  source = "records_africa.csv joined to ERA5 monthly means, grouped by wfo_species",
                   species = nrow(table),
                   records_with_temperature = count(!isnan, windows.tmin),
                   records_with_precipitation = count(!isnan, windows.tp),
@@ -104,6 +118,7 @@ function main(argv)
                   window_months = 12,
                   temperature = "minimum monthly t2m over the window, K; records on the quarter-degree lattice left out",
                   precipitation = "mean monthly tp over the window, m/day; records on the lattice, near a botanic garden or naming one left out")
+    record_table(out, :species_widths, handle = handle)
     println(nrow(table), " species -> ", out)
     return nothing
 end
