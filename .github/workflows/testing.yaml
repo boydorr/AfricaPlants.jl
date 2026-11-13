@@ -25,7 +25,7 @@ jobs:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
       # The smoke test reads WorldClim's annual mean temperature; cache the download between runs.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.julia/scratchspaces/ed2dc23b-ada4-5fdb-a26f-56368a14ad8f/assets
           key: ecosistem-assets-${{ runner.os }}
