@@ -17,6 +17,15 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 AfricaPlants = {path = "../.."}
 
 [compat]
+CSV = "1"
+DataFrames = "1"
+DataPipeline = "0.59.3"
+DimensionalData = "0.30"
+Diversity = "0.6.3"
+EcoSISTEM = "0.11.1"
+JLD2 = "0.5, 0.6"
+MPI = "0.20.8"
 Plots = "1.38"
 Printf = "1"
 Statistics = "1"
+Unitful = "1.12"

@@ -4,7 +4,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-  # The package's compat, and the paper environment's, which holds the compat of what only it uses
+  # The package's compat, and the paper environment's
   - package-ecosystem: "julia"
     directories:
       - "/"
