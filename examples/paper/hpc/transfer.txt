@@ -10,3 +10,7 @@ data/records_africa.csv
 data/species_widths.csv
 data/evi/evi_reliable_2001_2025.tif
 data/plant_trait/data/global_plant_climate_envelopes.csv
+# The records a run reads of two inputs: the GBIF download the records are cleaned from, which never
+# leaves the laptop, and the envelopes, whose record names the paper they were made for.
+data/gbif/era5/0014627-260903145123482.csv.provenance.toml
+data/plant_trait/data/global_plant_climate_envelopes.csv.provenance.toml

@@ -6,7 +6,8 @@ Scripts that fetch and prepare every input the Africa runs need. They write unde
 records for the ERA5 and 20CRv3 downloads, which go through its `fetchfiles`, and for the GBIF
 downloads and the climate envelopes, from the metadata their DOIs resolve to, so that a run's
 account of its inputs carries them; the other scripts write their own. Each script is idempotent: a file already present is not fetched again, and a
-table already built is rebuilt only with `--force`.
+table already built is rebuilt only with `--force`. Nothing in `data/` but these scripts is tracked:
+each record is written with its file, and a pipeline run registers both.
 
 Run them from the repository root in this order. Nothing here is run by the test suite except
 the pure functions, which `test/runtests.jl` exercises on fabricated inputs.
@@ -19,10 +20,10 @@ the pure functions, which `test/runtests.jl` exercises on fabricated inputs.
 | 1d | `evi_mean.jl` | the MOD13C2 files | `evi/evi_mean_2001_2025.nc`: the mean EVI of good and marginal months at each cell, the stand-in for how many plants a cell holds: collection effort is records over EVI, so a record in a greener or less sampled cell seeds more individuals |
 | 1e | `evi_reliable.jl` | the mean EVI layer | `evi/evi_reliable_2001_2025.tif`: over the Africa box at 0.05 degrees, each cell's mean EVI, missing below 36 good months, as a GeoTIFF the runs read as a layer; each record's seeding weight is its cell's EVI times land area, shared among the records made there |
 | 2 | `inventory.jl` | the netCDF files | `inventory.csv`: every file's variables, unit strings, time axis, lattice |
-| 3 | `gbif_download.jl` | a GBIF account: `GBIF_USER`, `GBIF_PWD`, `GBIF_EMAIL` in the environment, or `user`, `pwd`, `email` in `~/.gbifrc` | two downloads, `gbif/era5/<key>.csv` (1940 onward, the ERA5 years) and `gbif/early/<key>.csv` (1806-1939, the years only 20CRv3 reaches), each with its DOI in its provenance |
+| 3 | `gbif_download.jl` | nothing for the two downloads made already, fetched by their DOIs; a GBIF account for a new request (`--force`): `GBIF_USER`, `GBIF_PWD`, `GBIF_EMAIL` in the environment, or `user`, `pwd`, `email` in `~/.gbifrc` | two downloads, `gbif/era5/<key>.csv` (1940 onward, the ERA5 years) and `gbif/early/<key>.csv` (1806-1939, the years only 20CRv3 reaches), each with its DOI in its provenance |
 | 3b | `centroids.jl` | nothing: GBIF's Catalogue of Centroids on GitHub, at a pinned commit | `centroids.csv`: country centroids, which `gbif_clean.jl` drops records near |
 | 3c | `gardens.jl` | nothing: CoordinateCleaner's institutions gazetteer on GitHub, at a pinned commit | `gardens.csv`: botanic gardens, which `gbif_clean.jl` flags records near |
-| 3d | `envelopes.jl` | the EIDC's climate envelopes, downloaded by hand and unpacked into `plant_trait/` | `plant_trait/data/global_plant_climate_envelopes.csv.provenance.toml`, the table's record, naming the dataset and the paper it was made for from their DOIs; tracked, so a run looks nothing up |
+| 3d | `envelopes.jl` | the EIDC's climate envelopes, downloaded by hand and unpacked into `plant_trait/` | `plant_trait/data/global_plant_climate_envelopes.csv.provenance.toml`, the table's record, naming the dataset and the paper it was made for from their DOIs, so that a run looks nothing up |
 | 4 | `gbif_clean.jl` | the GBIF CSVs | `records.csv` from the `era5` download and `records_early.csv` from `early`: one row per usable record, cleaned, with three flag columns |
 | 5 | `species_traits.jl` | `records.csv`, a cached WorldClim layer to place the continent outline, the WFO Plant List release `AfricaPlants` names | `records_africa.csv`, the records the model seeds from, each with the WFO species its name means |
 | 6 | `species_widths.jl` | `records_africa.csv`, the ERA5 `t2m` and `tp` files | `species_widths.csv`: per WFO species, the spread across its records of the twelve-month minimum temperature (records on the quarter-degree lattice left out) and mean precipitation (also records near or naming a botanic garden), missing below two records |
@@ -34,8 +35,7 @@ julia --project data/src/evi_download.jl     # about 29 GB, an Earthdata token; 
 julia --project data/src/evi_mean.jl
 julia --project data/src/evi_reliable.jl
 julia --project data/src/inventory.jl
-julia --project data/src/gbif_download.jl --request-only   # submit both; GBIF emails when ready
-julia --project data/src/gbif_download.jl                  # later: wait if needed, then fetch
+julia --project data/src/gbif_download.jl    # both downloads, by their DOIs; --force requests them afresh
 julia --project data/src/centroids.jl
 julia --project data/src/gardens.jl
 julia --project data/src/envelopes.jl
@@ -116,8 +116,9 @@ touching the network.
   latitude lattice is regular, grid-mapping attributes, `scale_factor`, `add_offset`,
   `_FillValue`.
 - **`gbif/era5/`, `gbif/early/`**: two GBIF occurrence downloads of Plantae with coordinates in
-  the Africa box, 1940 onward and 1806 to 1939, as the simple tab-separated CSV GBIF produces,
-  each with its request key and its provenance record: the file's checksum, its DOI and GBIF's
+  the Africa box, 1940 onward and 1806 to 1939, as the simple tab-separated CSV GBIF produces.
+  `AfricaPlants.GBIF_DOWNLOADS` names each by its DOI, by which it is fetched with no account, and
+  its key, which names its CSV. Each has its provenance record: the file's checksum, its DOI and GBIF's
   dated citation, the request's filter and years, and GBIF.org as the deposit it is cut from. Two
   rather than one so that a paper built on the ERA5 years alone has exactly the dataset it used to
   cite.

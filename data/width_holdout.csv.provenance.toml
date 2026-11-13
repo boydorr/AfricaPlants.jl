@@ -1,8 +1,0 @@
-source = "records_africa.csv joined to ERA5 monthly means, with WFO's taxonomy of the species pool"
-bytes = 58396
-prior_from_records = 30
-written = "2026-11-11T02:53:05.811"
-prior_members = 5
-known_from_records = 100
-writer = "data/src/width_holdout.jl"
-scores = "natural log of estimate over known width: rmse, median absolute value, exp(median) as bias; zero counts estimates of zero, left out of the rest"

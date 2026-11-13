@@ -45,11 +45,8 @@ const DATA = joinpath(pkgdir(AfricaPlants), "data")
 const ENVELOPES = get(ENV, "AFRICA_ENVELOPES",
                       joinpath(DATA, "plant_trait", "data",
                                "global_plant_climate_envelopes.csv"))
-# The GBIF download the seeding records are cleaned from, named by its request key; a run's
-# provenance carries its record.
-const GBIF = let dir = joinpath(DATA, "gbif", "era5")
-    joinpath(dir, strip(read(joinpath(dir, "request.key"), String)) * ".csv")
-end
+# The GBIF download the seeding records are cleaned from; a run's provenance carries its record.
+const GBIF = joinpath(DATA, "gbif", "era5", GBIF_DOWNLOADS.era5.key * ".csv")
 const SEED = parse(Int, get(ENV, "AFRICA_SEED", "1"))
 # The data pipeline run the stage is part of, which `pipeline.jl` defines in the stage's module
 # before including it, or `nothing` for a plain run. Every input is read through it: each file the

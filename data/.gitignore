@@ -1,22 +1,7 @@
-# The large downloads and the tables derived from them stay out of git; the scripts that fetch
-# them, the provenance sidecars, the request keys and the small summary tables are tracked.
-# `centroids.csv` and `gardens.csv` are small but derived from catalogues that state no licence
-# or a GPL one.
-era5/*.nc
-twentycr/*/*.nc
-gbif/*/*.zip
-gbif/*/*.csv
-*.part
-records*.csv
-record_climate.csv
-centroids.csv
-gardens.csv
-evi/*.hdf
-evi/*.nc
-evi/*.tif
-species_widths.csv
-# The EIDC's envelopes dataset as it publishes it, all but the provenance sidecar beside the table.
-plant_trait/*
-!plant_trait/data/
-plant_trait/data/*
-!plant_trait/data/*.provenance.toml
+# Everything in data/ but its scripts is fetched or made by them: the downloads, the tables made
+# from them, and the provenance record of each. None of it is tracked. A script writes each record
+# with its file, and a data pipeline run registers both, so the registry keeps the record of what a
+# run used.
+/*
+!/.gitignore
+!/src/

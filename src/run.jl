@@ -76,6 +76,19 @@ function africa_ecosystem(species, area::StudyArea,
 end
 
 """
+    GBIF_DOWNLOADS
+
+The GBIF occurrence downloads the records come from, by name: `era5`, every georeferenced plant
+record in the Africa box from 1940 on, which the runs are seeded from, and `early`, 1806 to 1939.
+Each is its DOI, by which it is cited and fetched, and the key GBIF knows it by, which names its
+CSV, `<key>.csv`.
+"""
+const GBIF_DOWNLOADS = (era5 = (doi = "10.15468/dl.n4a2sa",
+                                key = "0014627-260903145123482"),
+                        early = (doi = "10.15468/dl.4guss6",
+                                 key = "0014628-260903145123482"))
+
+"""
     gbif_record(path)
 
 Return the [`ProvenanceRecord`](@ref) of the GBIF occurrence download at `path`, which the seeding

@@ -4,16 +4,19 @@
 # the Africa box, as GBIF's simple tab-separated CSV, in **two** downloads so that each has a
 # DOI of its own to cite - `era5`, 1940 onward, the years the ERA5 climate covers, and `early`,
 # 1806 to 1939, the years only the NOAA 20CRv3 reanalysis reaches. A paper built on the ERA5 run
-# alone cites the first. GBIF prepares each file on its side, which takes minutes to hours, so
-# the request key is kept and a rerun resumes.
+# alone cites the first.
 #
 #     julia --project data/src/gbif_download.jl [era5|early] [--request-only] [--force] [--key KEY]
 #
+# Both downloads are made already, and `AfricaPlants.GBIF_DOWNLOADS` names each by its DOI and key:
+# a download made already is fetched by its DOI, which needs no account. `--force` requests a
+# download afresh, with a DOI of its own. GBIF prepares a requested file on its side, which takes
+# minutes to hours, so the request's key is kept in `gbif/<name>/request.key` and a rerun resumes.
 # `--request-only` submits the requests and stops; GBIF prepares the files and emails when they
 # are ready, and a later run without the flag picks up the saved keys, waits if it must, and
 # fetches. That is how to use a poor connection: request now, transfer when it is good.
 #
-# Needs `GBIF_USER`, `GBIF_PWD` and `GBIF_EMAIL` in the environment, or `user`, `pwd` and
+# A request needs `GBIF_USER`, `GBIF_PWD` and `GBIF_EMAIL` in the environment, or `user`, `pwd` and
 # `email` in `~/.gbifrc` (a free gbif.org account; the email is where GBIF sends the completion
 # notice). Writes `gbif/<name>/<key>.zip`, unpacks it to
 # `gbif/<name>/<key>.csv`, and records the download - its DOI, which the paper must cite, and the
@@ -257,14 +260,44 @@ function provenance!(csv::AbstractString, key::AbstractString, s, name::Symbol;
     return nothing
 end
 
-# One named download: request it (or resume it, if `gbif/<name>/request.key` or `--key` names
-# one), wait, fetch. `credentials` is called for the account only when a request is made.
+# The download `made`, by its DOI and key, put in `dir` where it is not there, and recorded where it
+# has no record: a download made already is fetched by its DOI, with no account.
+function fetch_made!(name::Symbol, made::NamedTuple, dir::AbstractString)
+    csv = joinpath(dir, made.key * ".csv")
+    if isfile(csv)
+        if !isfile(provenance_path(csv))
+            provenance!(csv, made.key, status(made.doi), name, fetched = false)
+            println(name, ": wrote the missing provenance for ", made.key,
+                    ".csv")
+        end
+        println(name, ": already have ", made.key,
+                ".csv; nothing to do (use --force to request it afresh).")
+        return csv
+    end
+    s = status(made.doi)
+    s.status == "SUCCEEDED" ||
+        error("GBIF download $(made.doi) is $(something(s.status, "unknown")), so it cannot be " *
+              "fetched; use --force to request it afresh")
+    (isnothing(s.link) || !endswith(s.link, made.key * ".zip")) &&
+        error("GBIF links download $(made.doi) to $(s.link), not to $(made.key).zip")
+    csv = fetch(made.key, s, dir, name)
+    println(name, ": fetched ", csv, " (DOI ", made.doi, ")")
+    return csv
+end
+
+# One named download: fetched by its DOI where it is made already, else requested (or resumed, if
+# `gbif/<name>/request.key` or `--key` names a request), waited for, and fetched. Returns its CSV, or
+# `nothing` where only a request was made. `credentials` is called for the account only when a
+# request is made.
 function download!(name::Symbol, credentials::Function; force::Bool = false,
                    key = nothing,
                    requestonly::Bool = false)
     range = REQUESTS[name]
     dir = joinpath(datadir(), "gbif", String(name))
     mkpath(dir)
+    made = get(AfricaPlants.GBIF_DOWNLOADS, name, nothing)
+    (force || !isnothing(key) || isnothing(made)) ||
+        return fetch_made!(name, made, dir)
     keyfile = joinpath(dir, "request.key")
     if isnothing(key) && isfile(keyfile)
         key = String(strip(read(keyfile, String)))
@@ -277,7 +310,7 @@ function download!(name::Symbol, credentials::Function; force::Bool = false,
         end
         println(name, ": already have ", key,
                 ".csv; nothing to do (use --force to refetch).")
-        return nothing
+        return csv
     end
     if isnothing(key) || force
         key = request_download(credentials(), range)
@@ -299,13 +332,6 @@ function download!(name::Symbol, credentials::Function; force::Bool = false,
     return csv
 end
 
-# The CSV the download `name` of `REQUESTS` was unpacked to, named by its saved request key.
-function download_csv(name::Symbol)
-    dir = joinpath(datadir(), "gbif", String(name))
-    key = String(strip(read(joinpath(dir, "request.key"), String)))
-    return joinpath(dir, key * ".csv")
-end
-
 # The downloads named on the command line (both by default), in order.
 function main(argv)
     named = [Symbol(a)
@@ -318,11 +344,11 @@ function main(argv)
     (!isnothing(key) && length(names) != 1) &&
         error("--key applies to one download; name it: era5 or early")
     requestonly = "--request-only" in argv
-    for name in names
-        download!(name, _credentials, force = forced(argv), key = key,
-                  requestonly = requestonly)
-    end
-    requestonly || pipeline_register(download_csv.(names), :gbif)
+    csvs = [download!(name, _credentials, force = forced(argv), key = key,
+                      requestonly = requestonly)
+            for name in names]
+    requestonly ||
+        pipeline_register(String[c for c in csvs if !isnothing(c)], :gbif)
     return nothing
 end
 

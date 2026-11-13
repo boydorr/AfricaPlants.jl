@@ -1,5 +1,14 @@
 # NEWS
 
+- Unreleased
+  - Changed
+    - Nothing in `data/` is tracked but its scripts. Each provenance record there is written with its file,
+      and a pipeline run registers both. MARS takes the two records its runs read of inputs it lacks, the
+      GBIF download's and the envelopes', through `examples/paper/hpc/transfer.txt`.
+    - The stages name the GBIF download from `GBIF_DOWNLOADS`, not from `request.key`.
+  - Added
+    - `GBIF_DOWNLOADS` names the two GBIF downloads by DOI and key. `data/src/gbif_download.jl` fetches a
+      download made already by its DOI, with no GBIF account; `--force` requests one afresh.
 - v0.3.0
   - Changed
     - The package is named `AfricaPlants`, not `Africa`: scripts say `using AfricaPlants`, and the

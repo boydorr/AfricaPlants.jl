@@ -56,7 +56,7 @@ export smallscale, mediumscale, SCALED_SPECIES, requested_cellsize,
        MIN_EVI_MONTHS, seeding_layer, months_back, scale_to_total,
        TABLES, table_facts, table_root, table_sidecar, table_record,
        SOURCE_ROOTS, source_track, provide_file, provide_files,
-       positioning_layers, africa_ecosystem, gbif_record,
+       positioning_layers, africa_ecosystem, GBIF_DOWNLOADS, gbif_record,
        DIVERSITY_ORDERS, METACOMMUNITY_MEASURES, record_diversity
 
 end
