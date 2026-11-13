@@ -34,6 +34,7 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
 ArchGDAL = "0.10"
+Base64 = "1.11"
 CDSAPI = "2.2, 2.3"
 CSV = "1"
 CodecBzip2 = "0.8"
