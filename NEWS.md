@@ -6,6 +6,10 @@
       whose forward run, control or burn-in seeding is not registered yet is left out and named. It
       records as inputs only the outputs it draws from, and refuses an `AFRICA_SEED` that is not a
       whole replicate.
+  - Fixed
+    - `record_diversity` starts a stage's yearly table afresh at its first year. A stage run into a
+      folder holding an earlier run's `diversity_<stage>_seed<N>.csv` added its years to that run's,
+      so the registered table held both runs.
 - v0.3.1
   - Changed
     - Nothing in `data/` is tracked but its scripts. Each provenance record there is written with its file,

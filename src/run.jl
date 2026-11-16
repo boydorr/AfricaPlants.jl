@@ -128,11 +128,12 @@ const METACOMMUNITY_MEASURES = (raw_alpha = Diversity.RawAlpha,
 """
     record_diversity(path, stage, years, totals, diversity, k)
 
-Append occurrence `k` of a stage's two recorders to the table at `path`, one row per metacommunity
+Add occurrence `k` of a stage's two recorders to the table at `path`, one row per metacommunity
 measure and order: the `stage` of the run and how many `years` into it this is, the individuals,
-living species and largest species from `totals`, and each measure from `diversity`. Write the header
-first if the file is new, and write each year as it is recorded, so that a run stopped part way keeps
-the years it reached. Return the counts and the measures by name, so that a caller can report them.
+living species and largest species from `totals`, and each measure from `diversity`. The stage's
+first occurrence starts the table afresh with its header, replacing any table an earlier run left at
+`path`; each later year is appended as it is recorded, so that a run stopped part way keeps the years
+it reached. Return the counts and the measures by name, so that a caller can report them.
 
 Under MPI every rank holds both recorders' values, and only the root writes.
 
@@ -142,7 +143,7 @@ Under MPI every rank holds both recorders' values, and only the root writes.
   - `totals`: the stage's `RecordTotals`.
   - `diversity`: the stage's `RecordDiversity`, recording the [`METACOMMUNITY_MEASURES`](@ref) in
     that order.
-  - `k`: the occurrence, as `simulate!` counts it.
+  - `k`: the occurrence, as `simulate!` counts it; 1, the stage's first, starts the table afresh.
 """
 function record_diversity(path::AbstractString, stage::AbstractString,
                           years::Real, totals::RecordTotals,
@@ -157,7 +158,8 @@ function record_diversity(path::AbstractString, stage::AbstractString,
               for i in axes(diversity.metacommunity, 1)]
     measures = NamedTuple{keys(METACOMMUNITY_MEASURES)}(Tuple(values))
     if !MPI.Initialized() || MPI.Comm_rank(MPI.COMM_WORLD) == 0
-        isfile(path) ||
+        # A run must never add to a table an earlier run left in the same folder.
+        (k == 1 || !isfile(path)) &&
             open(io -> println(io,
                                "stage,years,individuals,species,largest,measure,q,diversity"),
                  path, "w")

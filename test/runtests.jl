@@ -643,6 +643,21 @@ end
                             metacommunity = [Diversity.Gamma])
     @test_throws ErrorException record_diversity(path, "smoke", 0, totals,
                                                  other, 1)
+    # A stage's first occurrence starts its table afresh and each later one adds a year, so a run
+    # into a folder holding an earlier run's table replaces it, and a second run replaces the first.
+    twice = (totals = RecordTotals(eco, 2),
+             diversity = RecordDiversity(eco, 2, qs = DIVERSITY_ORDERS,
+                                         metacommunity = collect(METACOMMUNITY_MEASURES)))
+    for k in 1:2
+        twice.totals(eco, (count = k,))
+        twice.diversity(eco, (count = k,))
+    end
+    peryear = length(METACOMMUNITY_MEASURES) * length(DIVERSITY_ORDERS)
+    for _ in 1:2, k in 1:2
+        record_diversity(path, "smoke", k - 1, twice.totals, twice.diversity, k)
+    end
+    @test CSV.read(path, DataFrame).years == repeat([0, 1], inner = peryear)
+    @test count(startswith("stage,"), readlines(path)) == 1
 end
 
 # A made-up WFO Plant List release, written as the Darwin Core zip a release is: one order, one family,
