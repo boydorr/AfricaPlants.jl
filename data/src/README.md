@@ -47,7 +47,7 @@ julia --project -t auto data/src/species_widths.jl
 ## Through the data pipeline
 
 Every script also runs as a FAIR data pipeline run, and the paper's inputs are made that way. Run
-plainly, a script registers nothing. Launched by `fair run`, it takes the run's handle, reads its
+plainly, a script registers nothing. Launched by `fair"run <config>"`, it takes the run's handle, reads its
 inputs from the registry, and registers what it fetched or made. The files land where the plain
 script puts them, so the two routes give the same files.
 
@@ -64,24 +64,107 @@ A preparation run makes one table: `prepare-<step>.yaml` reads each input to whe
 reads it, rebuilds the table with `--force`, and registers it and its record as
 `AfricaPlants:CaseStudy/Data/<Stem>/data/<file stem>` and `.../provenance/<file stem>`.
 
-Each run is `fair pull --local <config>`, which registers the config's namespace, then
-`fair run <config>`. The ERA5 config names the last month of final ERA5 the runs use.
+### Setting up a clone
+
+The paper's inputs are made in a clean clone of a release. A pipeline run records the commit it
+ran, and refuses a checkout with uncommitted changes. From a shell:
 
 ```sh
-for source in envelopes centroids gardens wfo naturalearth worldclim era5 gbif modis; do
-    fair pull --local data/src/fetch-$source.yaml && fair run data/src/fetch-$source.yaml
-done
-fair pull --local data/src/prepare-clean.yaml && fair run data/src/prepare-clean.yaml
-fair pull --local data/src/prepare-africa.yaml && fair run data/src/prepare-africa.yaml
-fair pull --local data/src/prepare-widths.yaml && fair run data/src/prepare-widths.yaml
-fair pull --local data/src/prepare-evimean.yaml && fair run data/src/prepare-evimean.yaml
-fair pull --local data/src/prepare-evireliable.yaml && fair run data/src/prepare-evireliable.yaml
-fair pull --local data/src/prepare-holdout.yaml && fair run data/src/prepare-holdout.yaml
+git clone https://github.com/boydorr/AfricaPlants.jl AfricaPlants
+cd AfricaPlants
+git checkout v0.3.1
+julia --project -e 'using Pkg; Pkg.instantiate()'
 ```
+
+Everything after that runs in Julia, started with `julia --project` in the root of the clone.
+DataPipeline's `fair"..."` runs FAIR-CLI's `fair` command, which need not be on the path. Some steps
+are needed once on each machine, one once in each clone, and the registry is started in each
+session:
+
+```julia
+using DataPipeline
+DataPipeline.install_cli!()   # once on each machine: `fair` 0.12.0 or later
+fair"registry install"        # once on each machine, unless it has a local registry already
+fair"registry start"          # in each session; fair"registry stop" at the end
+fair"init"                    # once in each clone
+```
+
+`fair"init"` asks for what it needs: the remote registry, `https://data.fairdatapipeline.org/api/`;
+a file holding your token for it, from your account there; who you are; and default namespaces,
+which every config here sets for itself. `fair"init --using <file>"` takes the answers from a CLI
+configuration file instead.
+
+### What a clone needs first
+
+Nothing in `data/` is tracked, so a new clone has none of it. **The envelopes must be put there by
+hand**: download the EIDC's deposit and unpack it into `data/plant_trait/` (step 3d above). The
+other fetch runs fetch what is missing: ERA5 with a CDS account, which takes hours; the MODIS files
+with an Earthdata token, 29 GB; and the GBIF download by its DOI, about 10 GB.
+
+Where another clone holds these already, copy each download with its `.provenance.toml` rather than
+fetch it again. The record says when those bytes were fetched, so it stays true. On macOS, `cp -c`
+makes each copy an APFS clone, which takes no space; drop the `-c` elsewhere:
+
+```sh
+src=<the other clone>/data
+cp -cR $src/plant_trait data/
+cp -cR $src/era5 data/
+mkdir -p data/evi && cp -c $src/evi/MOD13C2.* data/evi/
+mkdir -p data/gbif && cp -cR $src/gbif/era5 data/gbif/
+```
+
+Nothing else needs copying. The centroids and gardens come from pinned commits on GitHub, and WFO,
+Natural Earth and WorldClim from EcoSISTEM's cache, which `fetch.jl` fills. The tables made from
+the downloads are rebuilt by the preparation runs.
+
+### The runs
+
+Each run is `fair"pull --local <config>"`, which registers the config's namespace, then
+`fair"run <config>"`. The ERA5 config names the last month of final ERA5 the runs use. `fair"..."`
+throws if the command fails, so each loop stops at the first failure:
+
+```julia
+for source in ["envelopes", "centroids", "gardens", "wfo", "naturalearth", "worldclim", "era5", "gbif", "modis"]
+    println("Pulling from $source")
+    fair"pull --local data/src/fetch-$source.yaml"
+    fair"run data/src/fetch-$source.yaml"
+end
+for step in ["clean", "africa", "widths", "evimean", "evireliable", "holdout"]
+    println("Preparing $step")
+    fair"pull --local data/src/prepare-$step.yaml"
+    fair"run data/src/prepare-$step.yaml"
+end
+```
+
+The `africa`, `widths` and `holdout` runs take their threads from `JULIA_NUM_THREADS`, or every
+core when it is not set.
 
 The GBIF download, the MODIS files, the gardens and WorldClim's file are registered but not public:
 a push sends their records and not the files. Their licences or size forbid more, and only the
 preparation runs read them.
+
+### Pushing the runs
+
+Once every run has passed, register the release they were made from, stage it and every finished
+run the remote lacks, and push them to the remote registry:
+
+```julia
+release = DataPipeline.register_release!()   # the checked-out release
+product = release.data_product
+fair"add $(product.namespace):$(product.name)@v$(product.version)"
+foreach(println, DataPipeline.code_runs())   # every run, finished, staged and on the remote or not
+fair"add --all"                              # this project's finished runs the remote lacks
+fair"push"
+```
+
+`register_release!` takes the release's DOI from Zenodo, which archives each GitHub release.
+`DataPipeline.code_runs()` lists every run of the local registry; read the list before staging. A
+push sends, with each data product, every finished run that read it, staged or not, so a run that
+must not reach the remote is deleted from the local registry first, with `fair"rm <UUID> --yes"`. A
+push that stops part way can be run again: what reached the remote is found there, not sent twice.
+The listing, `fair add --all` and `fair rm` need `fair` 0.12.0 or later and DataPipeline 0.59.4 or
+later. The HPC's runs read what these runs registered, so they are pushed first:
+[`examples/paper/hpc/README.md`](../../examples/paper/hpc/README.md) goes on from there.
 
 ## Credentials
 

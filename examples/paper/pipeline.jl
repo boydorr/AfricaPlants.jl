@@ -12,8 +12,9 @@
 # passes on; the forward run and the control start from the settled state their seed's burn-in
 # registered, read from the registry in place of `AFRICA_START`. The stage is given the run's handle
 # as `PIPELINE`, and reads every input through it: each file is put where the plain stage reads it,
-# from the run's store. The third draws the paper's figures from every replicate the registry holds
-# on the grid, and registers them as `CaseStudy/<grid>/Figures/<Name>`.
+# from the run's store. The third draws the paper's figures from every whole replicate on the grid -
+# its forward run, its control and its burn-in's seeding all registered - and registers them as
+# `CaseStudy/<grid>/Figures/<Name>`.
 #
 # Each output is registered as `CaseStudy/<grid>/<Stage>/<Output>_<seed>` in the `AfricaPlants`
 # namespace, as `CaseStudy/50km/Forward/Cells_01`. The grid is the cell size `AFRICA_CELLSIZE` names,
@@ -107,20 +108,43 @@ const FIGURES = ("Richness" => "richness.pdf", "Abundance" => "abundance.pdf",
                  "ClimateEffect" => "climate_effect.pdf",
                  "Timeseries" => "timeseries.pdf", "Recorded" => "recorded.pdf")
 
-# Draw the paper's figures from every replicate the run reads on this grid, each output put in a
-# directory of its own under the name its stage wrote it as, and register each figure drawn.
+# The seeds on this grid that the run may read anything of, split into the whole replicates, whose
+# every output in `DRAWN_FROM` it may read, and the rest. The seeds are found in the working config's
+# `read:` entries, which `canread` consults too, so nothing is recorded as an input.
+function replicates(handle)
+    pattern = Regex("^CaseStudy/$GRID/[^/]+/[^/]+_(\\d+)\$")
+    found = Set{Int}()
+    for entry in get(handle.config, "read", [])
+        m = match(pattern, String(entry["data_product"]))
+        isnothing(m) || push!(found, parse(Int, m[1]))
+    end
+    whole(seed) = all(DRAWN_FROM) do ((stage, output), _)
+        return DataPipeline.canread(handle, product(stage, output, seed = seed))
+    end
+    complete = sort!(filter(whole, collect(found)))
+    return (complete = complete,
+            incomplete = sort!(setdiff(collect(found), complete)))
+end
+
+# Draw the paper's figures from every whole replicate the run may read on this grid - its forward run,
+# its control and its burn-in's seeding - each output put in a directory of its own under the name its
+# stage wrote it as, and register each figure drawn. A replicate missing any of them is left out, since
+# the maps average the forward runs and the controls apart, so both must cover the same seeds.
 function drawfigures(handle)
+    seeds = replicates(handle)
+    isempty(seeds.incomplete) ||
+        println("Left out, not yet whole replicates: seeds ",
+                join(seeds.incomplete, ", "))
+    isempty(seeds.complete) &&
+        error("no seed on the $GRID grid has its forward run, control and burn-in all to read")
+    SEED in seeds.complete ||
+        error("the time series draws seed $SEED (AFRICA_SEED), which is not a whole replicate: " *
+              "seeds $(join(seeds.complete, ", ")) are")
+    println("Drawn from seeds ", join(seeds.complete, ", "))
     dir = mktempdir()
-    for ((stage, output), file) in DRAWN_FROM
-        # A pattern gives a directory of links, each named after its data product with `/` as `_`,
-        # which is how the seeds are found.
-        prefix = "CaseStudy_$(GRID)_$(stage)_$(output)_"
-        linked = link_read!(handle, "CaseStudy/*/$stage/$(output)_*")
-        for link in filter(l -> startswith(l, prefix), readdir(linked))
-            seed = parse(Int, first(splitext(chopprefix(link, prefix))))
-            link_read!(handle, product(stage, output, seed = seed),
-                       path = joinpath(dir, file(seed)))
-        end
+    for seed in seeds.complete, ((stage, output), file) in DRAWN_FROM
+        link_read!(handle, product(stage, output, seed = seed),
+                   path = joinpath(dir, file(seed)))
     end
     withenv("AFRICA_SAVEDIR" => dir) do
         for script in ("plots.jl", "series.jl", "recorded.jl")

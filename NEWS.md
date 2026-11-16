@@ -1,5 +1,11 @@
 # NEWS
 
+- v0.3.2
+  - Changed
+    - The figures' pipeline run, `examples/paper/figures.yaml`, draws only whole replicates: a seed
+      whose forward run, control or burn-in seeding is not registered yet is left out and named. It
+      records as inputs only the outputs it draws from, and refuses an `AFRICA_SEED` that is not a
+      whole replicate.
 - v0.3.1
   - Changed
     - Nothing in `data/` is tracked but its scripts. Each provenance record there is written with its file,

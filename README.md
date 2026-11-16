@@ -92,20 +92,26 @@ The maps need the forward runs, and the controls for the abundance maps. The tim
 
 Every step also runs as a [FAIR data pipeline](https://www.fairdatapipeline.org) run, which registers each
 input and output with its provenance, so that every figure can be traced back to its sources. Run plainly,
-nothing is registered, and the files are the same. The `fair` command is FAIR-CLI's, which
-`DataPipeline.install_cli!()` installs.
+nothing is registered, and the files are the same. The `fair` command is FAIR-CLI's, which DataPipeline
+installs and runs from Julia as `fair"..."`. [`data/src/README.md`](data/src/README.md) sets up a clone
+for it: `fair` itself, a local registry, and `fair"init"`.
 
-- The data: fetch and preparation runs, one config each in `data/src/`, as
-  [`data/src/README.md`](data/src/README.md) describes.
+- The data: fetch and preparation runs, one config each in `data/src/`, made on one machine and pushed
+  to the remote registry, as [`data/src/README.md`](data/src/README.md) describes.
 - The stages: [`examples/paper/pipeline.jl`](examples/paper/pipeline.jl) with `burnin.yaml` and
-  `forward.yaml`, which read every input from the registry.
-- The figures: `examples/paper/figures.yaml`, drawn from every replicate the registry holds.
+  `forward.yaml`, which read every input from the registry. On an HPC,
+  [`examples/paper/hpc/README.md`](examples/paper/hpc/README.md) gives the order.
+- The figures: `examples/paper/figures.yaml`, drawn from every whole replicate the registry holds,
+  leaving out a seed whose forward run or control is not registered yet. Where the replicates ran
+  on another machine, the pull brings them from the remote registry. The figures' run is then
+  staged and pushed as the data's runs are.
 
-```sh
-fair pull --local examples/paper/figures.yaml && fair run examples/paper/figures.yaml
+```julia
+using DataPipeline
+fair"registry start"
+fair"pull examples/paper/figures.yaml"   # with `--local` where the registry holds the runs already
+fair"run examples/paper/figures.yaml"
 ```
-
-[`examples/paper/hpc/README.md`](examples/paper/hpc/README.md) gives the order on an HPC.
 
 ## Tests
 
