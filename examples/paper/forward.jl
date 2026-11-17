@@ -21,6 +21,7 @@
 # | `AFRICA_DISTRIBUTED` | `auto`             | `serial` or `mpi` to demand one                  |
 # | `AFRICA_SEED`     | `1`            | the replicate: seeds the run's random streams            |
 # | `AFRICA_SPECIES_SEED` | `1`        | seeds the species' own draws, as the burn-in's did       |
+# | `AFRICA_SURVIVAL` | `0.2`          | as for the burn-in, which it must match                  |
 # | `AFRICA_NEUTRAL`  | `false`        | `true` to repeat the 1941-1950 average year              |
 # | `AFRICA_SAVEDIR`  | `./Africa_run` | where the settled state is read and the diversity written |
 # | `AFRICA_START`    | `start_seed<N>_00.jld2` | the settled state in `AFRICA_SAVEDIR` to start from: this seed's own burn-in |
@@ -66,6 +67,9 @@ end
 # The species are the same in every replicate, so that every replicate can start from one settled
 # state: their own draws take this seed and the run's random streams take `SEED`.
 const SPECIES_SEED = parse(Int, get(ENV, "AFRICA_SPECIES_SEED", "1"))
+# How strongly a poor niche fit raises deaths and lowers births; unset, `africa_species`' default.
+const SURVIVAL = haskey(ENV, "AFRICA_SURVIVAL") ?
+                 (survival = parse(Float64, ENV["AFRICA_SURVIVAL"]),) : (;)
 # `auto` builds a distributed ecosystem under a live multi-rank MPI session and a serial one
 # otherwise; `mpi` and `serial` demand one or the other.
 const DISTRIBUTED = let want = get(ENV, "AFRICA_DISTRIBUTED", "auto")
@@ -91,7 +95,7 @@ pool = scaled_pool(species_pool(envelopes, widths,
                                 provenance = [ENVELOPES_RECORD,
                                     TABLE_RECORDS.species_widths],
                                 verbosity = ISROOT ? :normal : :silent).pool)
-species = africa_species(pool, seed = SPECIES_SEED,
+species = africa_species(pool; seed = SPECIES_SEED, SURVIVAL...,
                          verbosity = ISROOT ? :normal : :silent)
 positioning = positioning_layers(handle = HANDLE)
 within = africa_within(handle = HANDLE)

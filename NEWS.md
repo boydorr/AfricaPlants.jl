@@ -11,6 +11,10 @@
     - `examples/paper/series.jl` draws every forward run and control in `AFRICA_SAVEDIR`, each a thin
       line in its kind's colour, and no longer reads `AFRICA_SEED`. It refuses a yearly table in which
       a year appears twice, which holds more than one run.
+  - Added
+    - The stage scripts, `examples/paper/burnin.jl` and `forward.jl`, read `AFRICA_SURVIVAL`, the
+      exponent on niche suitability in births and deaths, as `africa_species`' `survival`. Unset, its
+      default of 0.2 holds.
   - Fixed
     - `record_diversity` starts a stage's yearly table afresh at its first year. A stage run into a
       folder holding an earlier run's `diversity_<stage>_seed<N>.csv` added its years to that run's,
