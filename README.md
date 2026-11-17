@@ -69,7 +69,7 @@ Each script's header lists the settings it reads from the environment. The ones 
 ## Building the paper's figures
 
 The figure scripts read what the runs wrote in `AFRICA_SAVEDIR` and write their figures beside it. They
-average over every replicate they find there.
+draw from every replicate they find there: the maps average them, and the other figures draw each run.
 
 ```sh
 julia --project=examples/paper examples/paper/plots.jl      # richness.pdf, abundance.pdf, climate_effect.pdf
@@ -81,12 +81,14 @@ julia --project=examples/paper examples/paper/recorded.jl   # recorded.pdf
   (`AfricaChangeNew` in its source). With controls present it also draws `abundance.pdf` and
   `climate_effect.pdf`, the individuals each cell holds with and without the changing climate.
 - [`series.jl`](examples/paper/series.jl) draws `timeseries.pdf`, the paper's time series of the whole
-  landscape against its control (`ClimateAbun` in its source), for the replicate `AFRICA_SEED` names.
+  landscape against its control (`ClimateAbun` in its source), every forward run and control a thin line in
+  its kind's colour.
 - [`recorded.jl`](examples/paper/recorded.jl) draws `recorded.pdf`, the species each cell ends with against
-  those ever recorded in it.
+  those ever recorded in it, every forward run drawn on one plot in one colour.
 
 The maps need the forward runs, and the controls for the abundance maps. The time series needs the yearly
-`diversity_*.csv` of one replicate, and `recorded.pdf` the `recorded_richness.csv` the burn-in writes.
+`diversity_*.csv` of the forward runs and controls, and `recorded.pdf` the `recorded_richness.csv` the burn-in
+writes.
 
 ## Through the FAIR data pipeline
 

@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 #
-# What the whole landscape did over the century, the forward run against its control: the plants it
-# holds, the species still alive, and the diversity partition at order 1 - the effective number of
-# species over the continent, and the effective number of distinct communities its cells make up.
+# What the whole landscape did over the century, every forward run against every control: the plants
+# it holds, and the diversity partition at order 1 - the effective number of species over the
+# continent, and the effective number of distinct communities its cells make up. Each run is a thin
+# line in its kind's colour, so that the replicates show as a bundle.
 #
 #     julia --project=examples/paper examples/paper/series.jl
 #
 # | variable         | default        | meaning                                         |
 # |------------------|----------------|-------------------------------------------------|
 # | `AFRICA_SAVEDIR` | `./Africa_run` | where the `diversity_*.csv` are read and the figure written |
-# | `AFRICA_SEED`    | `1`            | which replicate's records to draw               |
 #
 # It draws the runs alone, from 1941. The settling hold before them is left out: its years are not
 # calendar years, so drawing them to the left of 1941 reads as a decade of the 1930s that was never
@@ -24,21 +24,27 @@ using DataFrames
 using Plots
 
 const SAVEDIR = get(ENV, "AFRICA_SAVEDIR", joinpath(pwd(), "Africa_run"))
-const SEED = get(ENV, "AFRICA_SEED", "1")
 const START = FIRST_FULL_YEAR
 
-# One stage's yearly record. `offset` puts its `years` on the calendar: the hold ends where the
-# forward run and the control begin, so it is drawn to the left of them.
-function stage(name::AbstractString, offset::Real)
-    path = joinpath(SAVEDIR, "diversity_$(name)_seed$(SEED).csv")
-    isfile(path) ||
-        error("no yearly record at $(path); the runs predate it, or the seed is wrong")
-    table = CSV.read(path, DataFrame)
-    table.year = table.years .+ offset
-    return table
+# Every run of `kind`, `forward` or `neutral`, in `SAVEDIR` in seed order, each as its yearly record
+# with `years` put on the calendar. A table in which a year appears twice holds more than one run,
+# and is refused.
+function stage(kind::AbstractString)
+    found = filter(!isnothing,
+                   match.(Regex("^diversity_$(kind)_seed(\\d+)\\.csv\$"),
+                          readdir(SAVEDIR)))
+    return map(sort(found, by = m -> parse(Int, m[1]))) do m
+        table = CSV.read(joinpath(SAVEDIR, m.match), DataFrame)
+        for rows in groupby(table, [:measure, :q])
+            allunique(rows.years) ||
+                error("$(m.match) in $(SAVEDIR) holds a year more than once, so more than one run")
+        end
+        table.year = table.years .+ START
+        return table
+    end
 end
 
-# One measure at one order through a stage, and one of the per-year totals, both as year and value.
+# One measure at one order through a run, and one of the per-year totals, both as year and value.
 function measure(table::DataFrame, name::AbstractString, q::AbstractString)
     rows = filter(r -> r.measure == name && string(r.q) == q, table)
     return sort!(unique(select(rows, :year, :diversity => :value)), :year)
@@ -48,21 +54,28 @@ function total(table::DataFrame, column::Symbol)
                  :year)
 end
 
-forward = stage("forward", START)
-control = stage("neutral", START)
+forward = stage("forward")
+control = stage("neutral")
+isempty(forward) && error("no yearly records of forward runs in $(SAVEDIR)")
 
-# One panel: the two runs that share a settled state, which part at `START`.
+# One panel: every control and every forward run, each pair sharing a settled state, which part at
+# `START`.
 function panel(of, title, ylabel; legend = false)
     plt = plot(title = title, titleloc = :left, ylabel = ylabel,
                xlabel = "year", legend = legend, grid = false)
-    for (table, label, colour) in ((control,
-                                    "$(first(HELD_DECADE))-$(last(HELD_DECADE)) average held",
-                                    :steelblue),
-                                   (forward, "$(START) to 2026 climate",
-                                    :firebrick))
-        series = of(table)
-        plot!(plt, series.year, series.value, label = label, colour = colour,
-              linewidth = 2)
+    for (runs, label, colour) in ((control,
+                                   "$(first(HELD_DECADE))-$(last(HELD_DECADE)) average held",
+                                   :steelblue),
+                                  (forward, "$(START) to 2026 climate",
+                                   :firebrick))
+        for (i, table) in enumerate(runs)
+            series = of(table)
+            plot!(plt, series.year, series.value, colour = colour,
+                  linewidth = 1,
+                  label = i == 1 ?
+                          "$(label), $(length(runs)) run$(length(runs) == 1 ? "" : "s")" :
+                          "")
+        end
     end
     # From zero, so that the size of a change can be read against the quantity itself.
     ylims!(plt, 0, Inf)
@@ -81,5 +94,6 @@ figure = plot(panel(t -> total(t, :individuals), "A  individual plants",
               left_margin = 12Plots.mm, bottom_margin = 8Plots.mm)
 out = joinpath(SAVEDIR, "timeseries.pdf")
 savefig(figure, out)
-println("seed ", SEED, ": ", START, " to ",
-        round(Int, maximum(forward.year)), "; drawn to ", out)
+println(length(forward), " forward runs and ", length(control), " controls, ",
+        START, " to ", round(Int, maximum(maximum(t.year) for t in forward)),
+        "; drawn to ", out)

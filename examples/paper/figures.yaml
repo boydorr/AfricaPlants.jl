@@ -1,7 +1,7 @@
 # The paper's figures as a data pipeline run, drawn from every whole replicate of the case study the
 # registry holds on one grid: a seed whose forward run or control is missing is left out. See
 # `pipeline.jl`. From the root of the repository, with `AFRICA_SCALE` or `AFRICA_CELLSIZE` naming the
-# grid, and `AFRICA_SEED` the replicate the time series draws, which must be a whole one:
+# grid:
 #
 #     fair pull --local examples/paper/figures.yaml && fair run examples/paper/figures.yaml
 run_metadata:

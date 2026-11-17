@@ -4,8 +4,13 @@
   - Changed
     - The figures' pipeline run, `examples/paper/figures.yaml`, draws only whole replicates: a seed
       whose forward run, control or burn-in seeding is not registered yet is left out and named. It
-      records as inputs only the outputs it draws from, and refuses an `AFRICA_SEED` that is not a
-      whole replicate.
+      records as inputs only the outputs it draws from.
+    - `examples/paper/recorded.jl` draws every forward run in `AFRICA_SAVEDIR` on one plot, each as
+      its own series in one colour, where it drew only the first. The legend gives the runs' mean
+      correlation.
+    - `examples/paper/series.jl` draws every forward run and control in `AFRICA_SAVEDIR`, each a thin
+      line in its kind's colour, and no longer reads `AFRICA_SEED`. It refuses a yearly table in which
+      a year appears twice, which holds more than one run.
   - Fixed
     - `record_diversity` starts a stage's yearly table afresh at its first year. A stage run into a
       folder holding an earlier run's `diversity_<stage>_seed<N>.csv` added its years to that run's,

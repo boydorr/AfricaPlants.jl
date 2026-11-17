@@ -137,9 +137,6 @@ function drawfigures(handle)
                 join(seeds.incomplete, ", "))
     isempty(seeds.complete) &&
         error("no seed on the $GRID grid has its forward run, control and burn-in all to read")
-    SEED in seeds.complete ||
-        error("the time series draws seed $SEED (AFRICA_SEED), which is not a whole replicate: " *
-              "seeds $(join(seeds.complete, ", ")) are")
     println("Drawn from seeds ", join(seeds.complete, ", "))
     dir = mktempdir()
     for seed in seeds.complete, ((stage, output), file) in DRAWN_FROM
