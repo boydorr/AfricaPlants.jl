@@ -21,7 +21,7 @@
 # | `AFRICA_DISTRIBUTED` | `auto`             | `serial` or `mpi` to demand one                  |
 # | `AFRICA_SEED`     | `1`            | the replicate: seeds the run's random streams            |
 # | `AFRICA_SPECIES_SEED` | `1`        | seeds the species' own draws, as the burn-in's did       |
-# | `AFRICA_SURVIVAL` | `0.2`          | as for the burn-in, which it must match                  |
+# | `AFRICA_SURVIVAL` | `1.0`          | as for the burn-in, which it must match                  |
 # | `AFRICA_NEUTRAL`  | `false`        | `true` to repeat the 1941-1950 average year              |
 # | `AFRICA_SAVEDIR`  | `./Africa_run` | where the settled state is read and the diversity written |
 # | `AFRICA_START`    | `start_seed<N>_00.jld2` | the settled state in `AFRICA_SAVEDIR` to start from: this seed's own burn-in |

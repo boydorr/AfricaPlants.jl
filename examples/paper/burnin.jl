@@ -23,7 +23,7 @@
 # | `AFRICA_DISTRIBUTED` | `auto`             | `serial` or `mpi` to demand one                  |
 # | `AFRICA_SEED`     | `1`                   | the replicate: seeds this burn-in's random streams and names what it writes |
 # | `AFRICA_SPECIES_SEED` | `1`               | seeds the species' own draws, the same in every replicate so that they simulate one pool |
-# | `AFRICA_SURVIVAL` | `0.2`                 | how strongly a poor niche fit raises deaths and lowers births, `africa_species`' `survival` |
+# | `AFRICA_SURVIVAL` | `1.0`                 | how strongly a poor niche fit raises deaths and lowers births, `africa_species`' `survival` |
 # | `AFRICA_HELD`     | `10`                  | years the 1941-1950 average year is repeated     |
 # | `AFRICA_SAVEDIR`  | `./Africa_run`        | where the settled state is written, made if need be |
 # | `AFRICA_ENVELOPES`| the CEH envelope file | `global_plant_climate_envelopes.csv`, in `data/plant_trait/data/` |

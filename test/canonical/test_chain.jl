@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 #
 # The blessing test on the real data: the small-scale chain of one replicate - the backwards burn-in
-# and its held year, then the forward run and its control, seed 1 - run by the paper's stage scripts
-# in `examples/paper/`, in that directory's environment, on the ERA5 months, records, widths, seeding
-# grid and envelopes on this machine. It blesses what the chain was built from, as the SHA-256 of
-# each input, and what it produced: each stage's yearly individuals, species, largest species and
-# diversity, and each run's species totals at the end.
+# and its held year, then the forward run and its control, seed 1 and `survival` 0.2 - run by the
+# paper's stage scripts in `examples/paper/`, in that directory's environment, on the ERA5 months,
+# records, widths, seeding grid and envelopes on this machine. It blesses what the chain was built
+# from, as the SHA-256 of each input, and what it produced: each stage's yearly individuals, species,
+# largest species and diversity, and each run's species totals at the end.
 # Skipped where the data is not here, as on CI. Run with `Pkg.test(test_args = ["canonical"])`; see
 # README.md in this directory.
 
@@ -55,11 +55,13 @@ const STAGES = """
     end
     """
 
-# The chain run into `savedir`, once the paper's environment is set up.
+# The chain run into `savedir`, once the paper's environment is set up. `survival` is set rather than
+# left to `africa_species`' default, so that the blessed values do not move with the default.
 function runchain(savedir)
     withenv("JULIA_LOAD_PATH" => nothing, "JULIA_PROJECT" => nothing,
             "AFRICA_SCALE" => "small", "AFRICA_SEED" => "1",
-            "AFRICA_SPECIES_SEED" => "1", "AFRICA_SAVEDIR" => savedir,
+            "AFRICA_SPECIES_SEED" => "1", "AFRICA_SURVIVAL" => "0.2",
+            "AFRICA_SAVEDIR" => savedir,
             "AFRICA_SAVEEND" => "false", "AFRICA_DISTRIBUTED" => "serial",
             "AFRICA_CELLSIZE" => nothing, "AFRICA_START" => nothing,
             "AFRICA_HELD" => nothing) do
