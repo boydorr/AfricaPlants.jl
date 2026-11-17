@@ -69,7 +69,7 @@ Each script's header lists the settings it reads from the environment. The ones 
 ## Building the paper's figures
 
 The figure scripts read what the runs wrote in `AFRICA_SAVEDIR` and write their figures beside it. They
-average over every replicate they find there.
+draw from every replicate they find there: the maps average them, and the other figures draw each run.
 
 ```sh
 julia --project=examples/paper examples/paper/plots.jl      # richness.pdf, abundance.pdf, climate_effect.pdf
@@ -81,31 +81,39 @@ julia --project=examples/paper examples/paper/recorded.jl   # recorded.pdf
   (`AfricaChangeNew` in its source). With controls present it also draws `abundance.pdf` and
   `climate_effect.pdf`, the individuals each cell holds with and without the changing climate.
 - [`series.jl`](examples/paper/series.jl) draws `timeseries.pdf`, the paper's time series of the whole
-  landscape against its control (`ClimateAbun` in its source), for the replicate `AFRICA_SEED` names.
+  landscape against its control (`ClimateAbun` in its source), every forward run and control a thin line in
+  its kind's colour.
 - [`recorded.jl`](examples/paper/recorded.jl) draws `recorded.pdf`, the species each cell ends with against
-  those ever recorded in it.
+  those ever recorded in it, every forward run drawn on one plot in one colour.
 
 The maps need the forward runs, and the controls for the abundance maps. The time series needs the yearly
-`diversity_*.csv` of one replicate, and `recorded.pdf` the `recorded_richness.csv` the burn-in writes.
+`diversity_*.csv` of the forward runs and controls, and `recorded.pdf` the `recorded_richness.csv` the burn-in
+writes.
 
 ## Through the FAIR data pipeline
 
 Every step also runs as a [FAIR data pipeline](https://www.fairdatapipeline.org) run, which registers each
 input and output with its provenance, so that every figure can be traced back to its sources. Run plainly,
-nothing is registered, and the files are the same. The `fair` command is FAIR-CLI's, which
-`DataPipeline.install_cli!()` installs.
+nothing is registered, and the files are the same. The `fair` command is FAIR-CLI's, which DataPipeline
+installs and runs from Julia as `fair"..."`. [`data/src/README.md`](data/src/README.md) sets up a clone
+for it: `fair` itself, a local registry, and `fair"init"`.
 
-- The data: fetch and preparation runs, one config each in `data/src/`, as
-  [`data/src/README.md`](data/src/README.md) describes.
+- The data: fetch and preparation runs, one config each in `data/src/`, made on one machine and pushed
+  to the remote registry, as [`data/src/README.md`](data/src/README.md) describes.
 - The stages: [`examples/paper/pipeline.jl`](examples/paper/pipeline.jl) with `burnin.yaml` and
-  `forward.yaml`, which read every input from the registry.
-- The figures: `examples/paper/figures.yaml`, drawn from every replicate the registry holds.
+  `forward.yaml`, which read every input from the registry. On an HPC,
+  [`examples/paper/hpc/README.md`](examples/paper/hpc/README.md) gives the order.
+- The figures: `examples/paper/figures.yaml`, drawn from every whole replicate the registry holds,
+  leaving out a seed whose forward run or control is not registered yet. Where the replicates ran
+  on another machine, the pull brings them from the remote registry. The figures' run is then
+  staged and pushed as the data's runs are.
 
-```sh
-fair pull --local examples/paper/figures.yaml && fair run examples/paper/figures.yaml
+```julia
+using DataPipeline
+fair"registry start"
+fair"pull examples/paper/figures.yaml"   # with `--local` where the registry holds the runs already
+fair"run examples/paper/figures.yaml"
 ```
-
-[`examples/paper/hpc/README.md`](examples/paper/hpc/README.md) gives the order on an HPC.
 
 ## Tests
 

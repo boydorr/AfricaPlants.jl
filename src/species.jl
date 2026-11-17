@@ -261,7 +261,7 @@ function envelopes_record(path::AbstractString; handle = nothing)
 end
 
 """
-    africa_species(pool; density = 1.0 / m^2, water = nothing, survival = 0.2, seed = 1,
+    africa_species(pool; density = 1.0 / m^2, water = nothing, survival = 1.0, seed = 1,
                    provenance = EcoSISTEM.ProvenanceRecord[], verbosity = :normal)
 
 Build the [`SpeciesList`](@ref) of the species in `pool`, the `pool` of [`species_pool`](@ref), under
@@ -294,7 +294,7 @@ redistributed rather than lost.
 function africa_species(pool::SpeciesPool;
                         density::Unitful.Quantity = 1.0 / m^2,
                         water::Union{Nothing, Unitful.Quantity} = nothing,
-                        survival::Real = 0.2, seed::Integer = 1,
+                        survival::Real = 1.0, seed::Integer = 1,
                         provenance = EcoSISTEM.ProvenanceRecord[],
                         verbosity::Symbol = :normal)
     area = uconvert(m^2, 1 / density)

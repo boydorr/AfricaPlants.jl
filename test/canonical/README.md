@@ -9,7 +9,7 @@ There are two:
 | test | input | runs | catches |
 |---|---|---|---|
 | `smoke/*`, in `runtests.jl`'s "Choosing a grid" | a synthetic pool of 20 species on WorldClim's annual mean temperature, Africa's bounding box at the coarsest grid, one year | with the unit suite, on CI too | a change in EcoSISTEM's dynamics, or its dependencies', on a fixed synthetic input |
-| `chain/*`, `test_chain.jl` | the small-scale chain of one replicate (burn-in, held year, forward run, control; seed 1) on the real ERA5 months, records, widths, seeding grid and envelopes | on request, where the data is (`data/` is not in the repository, so never on CI) | a change in what a run of this package computes: layers, species, seeding, the stage scripts in `examples/paper/` |
+| `chain/*`, `test_chain.jl` | the small-scale chain of one replicate (burn-in, held year, forward run, control; seed 1, `survival` 0.2) on the real ERA5 months, records, widths, seeding grid and envelopes | on request, where the data is (`data/` is not in the repository, so never on CI) | a change in what a run of this package computes: layers, species, seeding, the stage scripts in `examples/paper/` |
 
 Run the chain test, which takes some minutes:
 
@@ -47,4 +47,6 @@ digests) must match exactly.
 What each cannot see. In the smoke run every active cell stays occupied, so its cell counts cannot
 move and `by_species` carries the check. In the small chain the forward run is one year, and that
 year's climate is 1940's, so the forward run and its control are identical: a change confined to how
-the climate changes through time needs the medium scale.
+the climate changes through time needs the medium scale. The chain sets `survival` through
+`AFRICA_SURVIVAL`, so it cannot see a change to `africa_species`' default. The smoke run builds its
+species with EcoSISTEM's `build_species`, so it runs at EcoSISTEM's default.
